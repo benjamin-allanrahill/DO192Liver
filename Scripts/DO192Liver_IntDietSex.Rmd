@@ -1,0 +1,1490 @@
+---
+title: "Scanning, Collation, and Analysis for Diet/Sex Interactive QTLs"
+author: "Douglas Perkins"
+date: '`r Sys.Date()`'
+output:
+  html_notebook: null
+  html_document: default
+  toc: yes
+  toc_depth: 3
+  toc_float: TRUE
+  code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Built with R `r getRversion()`
+
+# 0. Packages and Settings
+```{r}
+# Install packages
+# This is all from the Manhattan/AE plot script.
+install_packages(devtools)
+library(devtools)
+install_github("dmgatti/DOQTL")
+source("https://bioconductor.org/biocLite.R")
+biocLite("BSgenome.Mmusculus.UCSC.mm10")
+install_github("simecek/intermediate")
+install_github("kbroman/qtlcharts")
+install.packages(tidyverse)
+```
+
+```{r}
+library(qtl2)
+library(qtl2geno)
+library(qtl2scan)
+library(qtl2convert)
+library(qtl2plot)
+library(qtlcharts)
+library(DOQTL)
+library(intermediate)
+library(dplyr)
+library(ggplot2)
+#The following aren't necessary yet.
+#library(qtl2db)
+```
+Load required packages.  
+[Download rqtl2 if needed.](http://kbroman.org/qtl2/)
+
+```{r, echo=F}
+# Sources of the package dependencies (by original script)
+# qtl2geno - scanint_one_rna_protein_Perkins_7_6.R (HPC)
+# qtl2scan - scanint_one_rna_protein_Perkins_7_6.R (HPC)
+# qtl2convert - scanint_one_rna_protein_Perkins_7_6.R (HPC)
+# qtl2plot - scanint_one_rna_protein_Perkins_7_6.R (HPC), DO192e/pQTL_LODCollate_IntScan_MaxLOD_7_5.R
+# qtlcharts - Diet.eQTL.pQTL.ExampleScript_7_6.R (Manhattan/AE)
+# DOQTL - Diet.eQTL.pQTL.ExampleScript_7_6.R (Manhattan/AE)
+```
+
+```{r}
+options(stringsAsFactors = F)
+```
+Set strings to not be factors to avoid problems with data frames containing character vectors.
+
+### Load data
+```{r}
+load("C:/Users/s-perkid/Desktop/DO192Liver/data/DO192LiverData_Formattedfor_rQTL2.Rdata")
+```
+
+# 1. Scan
+
+### Locally and with one gene.
+**Script**: scanint_one_rna_protein_Perkins_7_6.R - needs to be edited to have specific gene choice instead of BEG:END, if it matters.
+        also did not previously have a method to get the actual closest SNP, only the index of that SNP.  
+**Input**: DO192 Liver Data  
+**Output**: ...DO192Liver.DietSexInts.RData (1 file) 
+
+This only scans RNA that have corresponding protein measurements.
+```{r, eval=F}
+# Choose a gene
+gene_name <- "Tmem68"  
+
+# Get the gene's index in the protein and rna data.
+index.protein <- which(annotations.protein.192$Associated.Gene.Name == gene_name)
+index.rna <- which(annotations.rna.192$Gene == gene_name)  
+
+# Get the chromosome that the gene is on
+gene_chr <- annotations.protein.192[index.protein,]$Chromosome.Name  
+
+# Determine the SNP closest to the center of the gene.
+  closestSNP <- markers.64K[markers.64K$chr==gene_chr,][which.min(abs(mean(annotations.protein.192[index.protein,]$Gene.Start..bp., annotations.protein.192[index.protein,]$Gene.End..bp.) - markers.64K[which(markers.64K$chr==gene_chr),]$bp)),]
+
+# Only subset mice with protein expression data. I don't remember what issue this prevented.
+mice.with.data.r <- !is.na(expr.rna.192[,index.rna])
+mice.with.data.p <- !is.na(expr.protein.192[,index.protein])
+
+# Set up kinship matrices for the mice that have data for your given RNA/protein. Does it need to be for all chromosomes?
+K.LOCO.192.chr.r <- K.LOCO.qtl2
+K.LOCO.192.chr.p <- K.LOCO.qtl2
+for (chromosome in 1:20){
+  K.LOCO.192.chr.r <- K.LOCO.qtl2[[chromosome]][mice.with.data.r,mice.with.data.r]
+}
+for (chromosome in 1:20){
+  K.LOCO.192.chr.p[[chromosome]] <- K.LOCO.qtl2[[chromosome]][mice.with.data.p,mice.with.data.p]
+}  
+
+# Set up additive and interactive covariates for RNA/protein, only mice with data.
+addcovar.r <- model.matrix(~ Sex + Diet, data=covariates.rna.192[mice.with.data.r, ])
+intcovar.sex.r <- model.matrix(~ Sex, data=covariates.rna.192[mice.with.data.r, ])
+intcovar.diet.r <- model.matrix(~ Diet, data=covariates.rna.192[mice.with.data.r, ])
+
+addcovar.p <- model.matrix(~ Sex + Diet, data=covariates.protein.192[mice.with.data.p, ])
+intcovar.sex.p <- model.matrix(~ Sex, data=covariates.protein.192[mice.with.data.p, ])
+intcovar.diet.p <- model.matrix(~ Diet, data=covariates.protein.192[mice.with.data.p, ])
+
+# Set the number of processor cores to be used. Use 1 on the HPC.
+cores.num = 1
+
+# Perform QTL/LOD scans for RNA/protein in conditions of additive, interactive diet, and interactive sex covariates.
+  # RNA
+  # Scan / RNA / Additive covariate: Sex & Diet
+  lod.rna.addcovariatesonly <- scan1(genoprobs=probs[mice.with.data.r,],
+                                     kinship=K.LOCO.192.chr.r,
+                                     pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                     addcovar=addcovar.r[,-1],
+                                     cores=cores.num, reml=TRUE)
+
+  
+  # Scan / RNA / Interactive covariate: Diet
+  lod.rna.dietint <- scan1(genoprobs=probs[mice.with.data.r,],
+                            kinship=K.LOCO.192.chr.r,
+                            pheno=expr.rna.192[mice.with.data.r,index.rna],
+                            addcovar=addcovar.r[,-1],
+                            intcovar=intcovar.diet.r[,-1],
+                            cores=cores.num, reml=TRUE)
+
+  
+  # Scan / RNA / Interactive covariate: Sex
+  lod.rna.sexint <- scan1(genoprobs=probs[mice.with.data.r,],
+                          kinship=K.LOCO.192.chr.r,
+                          pheno=expr.rna.192[mice.with.data.r,index.rna],
+                          addcovar=addcovar.r[,-1],
+                          intcovar=intcovar.sex.r[,-1],
+                          cores=cores.num, reml=TRUE)
+  
+  # PROTEIN
+  # Scan / Protein / Additive covariate: Sex & Diet
+  lod.protein.addcovariatesonly <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                          kinship=K.LOCO.192.chr.p,
+                                          pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                          addcovar=addcovar.p[,-1],
+                                          cores=cores.num, reml=TRUE)
+  
+
+  
+  # Scan / Protein / Interactive covariate: Diet
+  lod.protein.dietint <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                kinship=K.LOCO.192.chr.p,
+                                pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                addcovar=addcovar.p[,-1],
+                                intcovar=intcovar.diet.p[,-1],
+                                cores=cores.num, reml=TRUE)
+  
+  
+  # Scan / Protein / Interactive covariate: Sex
+  lod.protein.sexint <- scan1(genoprobs=probs[mice.with.data.p,], 
+                              kinship=K.LOCO.192.chr.p, 
+                              pheno=expr.protein.192[mice.with.data.p,index.protein], 
+                              addcovar=addcovar.p[,-1], 
+                              intcovar=intcovar.sex.p[,-1], 
+                              cores=cores.num, reml=TRUE)
+  
+  # Systematically name the file.
+  file_name <- paste(annotations.protein.192[index.protein,]$Associated.Gene.Name, "_", annotations.protein.192[index.protein,]$Ensembl.Protein.ID, ".DO192Liver.DietSexInts.RData", sep="")
+  
+  # Set the working directory (FOR THIS NOTEBOOK ONLY)
+  setwd("C:/Users/s-perkid/Desktop/DO192Liver/notebooks")
+  
+  # Save the scan data to the file.
+  save(index.rna, index.protein, closestSNP, lod.rna.addcovariatesonly, lod.rna.dietint, lod.rna.sexint, lod.protein.addcovariatesonly, lod.protein.dietint, lod.protein.sexint, file = file_name)
+  
+```
+
+
+### On Cadillac with many genes.
+**Script**: scanint_one_rna_protein_Perkins_7_6.R  
+**Input**: DO192 Liver Data  
+**Output**: ...DO192Liver.DietSexInts.RData (many files)  
+
+This only scans RNA that have corresponding protein measurements.  
+Set `cores.num <- 1` if working with the HPC.  
+Specify R/3.3.2 on the HPC. This is also done in the job generating script below (The version is newer now - should we update this?)
+```{r, eval=F}
+# Choose a beginning and end index OR use the script below to generate jobs to cycle through a desired number in chosen increments.
+beg <- 1
+end <- 2
+
+# Set the number of processor cores to be used. Use 1 on the HPC.
+cores.num = 1
+
+for (j in beg:end) {
+# Get the gene's index in the protein and rna data.
+index.protein <- j
+index.rna <- which(annotations.rna.192$EnsemblID == annotations.protein.192[index.protein,]$Ensembl.Gene.ID)  
+
+# Get the chromosome that the gene is on
+gene_chr <- annotations.protein.192[index.protein,]$Chromosome.Name  
+
+# Determine the SNP closest to the center of the gene.
+  closestSNP <- markers.64K[markers.64K$chr==gene_chr,][which.min(abs(mean(annotations.protein.192[index.protein,]$Gene.Start..bp., annotations.protein.192[index.protein,]$Gene.End..bp.) - markers.64K[which(markers.64K$chr==gene_chr),]$bp)),]
+
+# Only subset mice with protein expression data. I don't remember what issue this prevented.
+mice.with.data.r <- !is.na(expr.rna.192[,index.rna])
+mice.with.data.p <- !is.na(expr.protein.192[,index.protein])
+
+
+# Set up kinship matrices for the mice that have data for your given RNA/protein. Does it need to be for all chromosomes?
+K.LOCO.192.chr.r <- K.LOCO.qtl2
+K.LOCO.192.chr.p <- K.LOCO.qtl2
+for (chromosome in 1:20){
+  K.LOCO.192.chr.r <- K.LOCO.qtl2[[chromosome]][mice.with.data.r,mice.with.data.r]
+}
+for (chromosome in 1:20){
+  K.LOCO.192.chr.p[[chromosome]] <- K.LOCO.qtl2[[chromosome]][mice.with.data.p,mice.with.data.p]
+}  
+
+# Set up additive and interactive covariates for RNA/protein, only mice with data.
+addcovar.r <- model.matrix(~ Sex + Diet, data=covariates.rna.192[mice.with.data.r, ])
+intcovar.sex.r <- model.matrix(~ Sex, data=covariates.rna.192[mice.with.data.r, ])
+intcovar.diet.r <- model.matrix(~ Diet, data=covariates.rna.192[mice.with.data.r, ])
+
+addcovar.p <- model.matrix(~ Sex + Diet, data=covariates.protein.192[mice.with.data.p, ])
+intcovar.sex.p <- model.matrix(~ Sex, data=covariates.protein.192[mice.with.data.p, ])
+intcovar.diet.p <- model.matrix(~ Diet, data=covariates.protein.192[mice.with.data.p, ])
+
+# Perform QTL/LOD scans for RNA/protein in conditions of additive, interactive diet, and interactive sex covariates.
+  cat("Scanning ", j, " out of ", nrow(annotations.protein.192), " ",annotations.protein.192$Associated.Gene.Name[j], "\n")
+  # RNA
+  # Scan / RNA / Additive covariate: Sex & Diet
+  lod.rna.addcovariatesonly <- scan1(genoprobs=probs[mice.with.data.r,],
+                                     kinship=K.LOCO.192.chr.r,
+                                     pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                     addcovar=addcovar.r[,-1],
+                                     cores=cores.num, reml=TRUE)
+
+  
+  # Scan / RNA / Interactive covariate: Diet
+  lod.rna.dietint <- scan1(genoprobs=probs[mice.with.data.r,],
+                            kinship=K.LOCO.192.chr.r,
+                            pheno=expr.rna.192[mice.with.data.r,index.rna],
+                            addcovar=addcovar.r[,-1],
+                            intcovar=intcovar.diet.r[,-1],
+                            cores=cores.num, reml=TRUE)
+
+  
+  # Scan / RNA / Interactive covariate: Sex
+  lod.rna.sexint <- scan1(genoprobs=probs[mice.with.data.r,],
+                          kinship=K.LOCO.192.chr.r,
+                          pheno=expr.rna.192[mice.with.data.r,index.rna],
+                          addcovar=addcovar.r[,-1],
+                          intcovar=intcovar.sex.r[,-1],
+                          cores=cores.num, reml=TRUE)
+  
+  # PROTEIN
+  # Scan / Protein / Additive covariate: Sex & Diet
+  lod.protein.addcovariatesonly <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                          kinship=K.LOCO.192.chr.p,
+                                          pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                          addcovar=addcovar.p[,-1],
+                                          cores=cores.num, reml=TRUE)
+  
+
+  
+  # Scan / Protein / Interactive covariate: Diet
+  lod.protein.dietint <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                kinship=K.LOCO.192.chr.p,
+                                pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                addcovar=addcovar.p[,-1],
+                                intcovar=intcovar.diet.p[,-1],
+                                cores=cores.num, reml=TRUE)
+  
+  
+  # Scan / Protein / Interactive covariate: Sex
+  lod.protein.sexint <- scan1(genoprobs=probs[mice.with.data.p,], 
+                              kinship=K.LOCO.192.chr.p, 
+                              pheno=expr.protein.192[mice.with.data.p,index.protein], 
+                              addcovar=addcovar.p[,-1], 
+                              intcovar=intcovar.sex.p[,-1], 
+                              cores=cores.num, reml=TRUE)
+  
+    # Systematically name the file.
+  file_name <- paste(annotations.protein.192[index.protein,]$Associated.Gene.Name, "_", annotations.protein.192[index.protein,]$Ensembl.Protein.ID, ".DO192Liver.DietSexInts.RData", sep="")
+  
+  # Save the scan data to the file.
+  save(index.rna, index.protein, index.closestSNP, lod.rna.addcovariatesonly, lod.rna.dietint, lod.rna.sexint, lod.protein.addcovariatesonly, lod.protein.dietint, lod.protein.sexint, file = file_name)
+  
+  # Display progress info by count and gene name.
+    cat("Done scanning ", j, " out of ", nrow(annotations.protein.192), " ",annotations.protein.192$Associated.Gene.Name[j], "\n")
+
+}
+```
+  
+Use the following python program to generate job PBS scripts for the HPC with a desired number of proteins per job. I may need to adapt this script to generate jobs for other purposes later - I think I wrote my own PBS scripts last summer and had giant jobs.
+```{r engine='python'}
+########################################
+## Python script to batch pQTL scans
+## on Cadillac
+## Input: R code to run pQTL
+## Output: multiple scripts to run pQTL jobs
+########################################
+import os
+#### read the first part of R file
+e1 =open("scanint_one_rna_protein_Perkins.R","r")
+e1Lines = e1.readlines()
+e1.close()
+
+#### read the second part of R file
+#e2 = open("pQTL2_wProteinRNA_Conditional_DO192Kidney.R","r")
+#e2Lines = e2.readlines()
+#e2.close()
+
+### num of genes per job = 250
+nGenes = 8050
+beg =1
+end =250
+nJobs = nGenes/250
+#####
+### Create the job dir and a output directory if it does not exist already
+#####
+jobDir = os.getcwd()+"/DO192Liver_DietSexInt_Scripts"
+if not os.path.isdir(jobDir):
+    os.mkdir(jobDir)
+for i in range(1,nJobs+1):
+    print "beg = " , beg
+    print "end = ", end
+    #####
+    #### Create a new R file in the job directory
+    #####
+    tmpfile = jobDir+'/pQTLg%dg%d_j%dwProtein.r'%(beg,end,i)
+    ######### Write some R code into it. This code is unique to this R file
+    tmp = open(tmpfile, "w")
+    #tmp.writelines(e1Lines)
+    tmp.write("######################################\n")
+    tmp.write("beg = " + str(beg))
+    tmp.write("\n")
+    tmp.write("end = " + str(end))
+    tmp.write("\n")
+    tmp.write("######################################\n")
+    tmp.writelines(e1Lines)
+    tmp.close()
+    #########    #########    #########    #########
+    # Create script to submit  the R file as a job
+    #########    #########    #########    #########
+    jobfile = jobDir+'/jQTLg%dg%d_%dwProtein.job'%(beg,end,i)
+    job=open(jobfile,"w")
+    job.write("#!/bin/bash\n")
+    job.write("#PBS -l nodes=1:ppn=1,walltime=8:00:00\n")
+    job.write("cd $PBS_O_WORKDIR\n")
+    job.write("module load R/3.3.2\n")
+    rCMD= "R --no-save < " + tmpfile
+    job.write(rCMD)
+    job.write("\n")
+    job.close()
+    subCMD = "qsub " + jobfile
+    print subCMD
+    os.system(subCMD)
+    ### Update beg and end
+    beg = beg+250
+    if (end != (nJobs*250-250)):
+        end= end + 250
+    else:
+        end = end + (nGenes-(nJobs*250)+250)
+```
+# 2. Collate / Filter Peaks
+### For "local"" SNPs/QTLs (closest SNP to center of coding region)
+**Scripts**: -DO192eQTL_LODCollate_IntScan_MaxLOD_7_5.R (eQTLs),  
+         -DO192pQTL_LODCollate_IntScan_MaxLOD_7_5.R (pQTLs)  
+**Input**: ...DO192Liver.DietSexInts.RData  
+**Outputs**: -DO192Liver_InteractiveeQTL_LODscoresatLocalSNP.txt (eQTLs)  
+         -DO192Liver_InteractivepQTL_LODscoresatLocalSNP.txt (pQTLs)  
+  
+Note: This doesn't **need** to be two different scripts; it may just be that the number of columns is too high with both eQTLs & pQTLs.
+
+Load data and prepare an empty results table:         
+```{r, eval=F}
+# Make a list of all the filenames in the IntScans directory (HPC)
+# filenames = dir(path = "/hpcdata/scm/DO192Liver/IntScans", pattern = "..DO192Liver.DietSexInts.RData") (HPC)
+
+# Make a "temporary" empty numeric vector with a length equal to the number of DietSexInts.RData scan files. (HPC)
+# tmp = rep(0, length(filenames)) (HPC)
+tmp = rep(0, 1) # Non-HPC, single-gene version
+
+# Make a data frame to hold the results of the collation. Each column is initialized by holding the tmp vector, as this is the number of data points each will be filled.
+results = data.frame(ENSMUSP=tmp, ENSMUSG=tmp, Gene.Symbol=tmp, Gene.Chromosome=tmp,
+                     Gene.Start.Mbp=tmp, Gene.End.Mbp=tmp, Local.SNP.ID=tmp,
+                     Local.SNP.Chr=tmp, Local.SNP.Mbp=tmp, Local.SNP.cM=tmp,
+                     LOD.AdditiveCovariatesOnly=tmp, LOD.Diet.Interactive=tmp,
+                     Diet.LODdifference=tmp, LOD.Sex.Interactive=tmp, Sex.LODdifference=tmp)
+
+
+```
+
+Pull the transcript expression LODs of the closest SNP to each gene center.
+```{r, eval=F}
+# Collating eQTL hits
+#for(p in 1:length(filenames)){ (HPC)
+# Load a DietSexInts.Rdata scan (HPC)
+#  load(filenames[p]) (HPC)
+  load(file_name)
+  p = 1
+# Identify the gene
+  genesymbol = annotations.protein.192[index.protein,]$Associated.Gene.Name
+  
+# Display progress by count and gene name to the user (HPC)
+# print(paste("Processing ",p," of ", length(filenames)," ",genesymbol, sep="")) (HPC)
+  
+# Change the name of chromosome 20 in markers.64K to 'X' (DOQTL format) from '20' (qtl2 format) so that it can be compared with the chromosome in the protein annotations.
+  markers.64K$chr[markers.64K$chr=="20"] <- "X"
+  
+# Determine the closest SNP to the center of the gene and get its index in markers.64K (I should just pass this along with the data from the scan script in the future.)
+  closestSNP <- markers.64K[markers.64K$chr==gene_chr,][which.min(abs(mean(annotations.protein.192[index.protein,]$Gene.Start..bp., annotations.protein.192[index.protein,]$Gene.End..bp.) - markers.64K[which(markers.64K$chr==gene_chr),]$bp)),]  
+
+  index.closestSNP <- which(markers.64K$marker==closestSNP$marker)
+  
+# Fill the results table with information about the gene of interest
+  results$ENSMUSP[p] <- annotations.protein.192$Ensembl.Protein.ID[index.protein]
+  results$ENSMUSG[p] <- annotations.rna.192$EnsemblID[index.rna]
+  results$Gene.Symbol[p] <- genesymbol
+  results$Gene.Chromosome[p] <- annotations.protein.192$Chromosome.Name[index.protein]
+  results$Gene.Start.Mbp[p] <- annotations.protein.192$Gene.Start..bp.[index.protein]
+  results$Gene.End.Mbp[p] <- annotations.protein.192$Gene.End..bp.[index.protein]
+  
+# Fill the results table with information about the closest SNP.
+  results$Local.SNP.ID[p] <- markers.64K$marker[index.closestSNP]
+  results$Local.SNP.Chr[p] <- markers.64K$chr[index.closestSNP]
+  results$Local.SNP.Mbp[p] <- markers.64K$bp[index.closestSNP]
+  results$Local.SNP.cM[p] <- markers.64K$cM[index.closestSNP]
+  
+# Fill the results table with the additive and interactive QTLs observed at the closest SNP. *Is this actually "the local SNP"?
+  results$LOD.AdditiveCovariatesOnly[p] <- round(lod.rna.addcovariatesonly[index.closestSNP], digits=2)
+  results$LOD.Diet.Interactive[p] <- round(lod.rna.dietint[index.closestSNP],digits=2)
+  results$Diet.LODdifference[p] <- round(lod.rna.dietint[index.closestSNP] - lod.rna.addcovariatesonly[index.closestSNP],digits=2)
+  results$LOD.Sex.Interactive[p] <- round(lod.rna.sexint[index.closestSNP],digits=2)
+  results$Sex.LODdifference[p] <- round(lod.rna.sexint[index.closestSNP] - lod.rna.addcovariatesonly[index.closestSNP],digits=2)
+}
+
+# Write table to file.
+write.table(results, "C:/Users/s-perkid/Desktop/DO192Liver/notebooks/DO192Liver_InteractiveeQTL_LODscoresatLocalSNP.txt", col.names=NA,sep="\t")
+# write.table(results,"/hpcdata/scm/DO192Liver/DO192Liver_InteractiveeQTL_LODscoresatLocalSNP.txt",col.names=NA,sep="\t") (HPC)
+print("Finished Successfully!")
+```
+
+Pull the protein expression LODs of the closest SNP to each gene center.
+```{r, eval=F}
+# Collating pQTL hits
+#for(p in 1:length(filenames)){ (HPC)
+  # Load a DietSexInts.Rdata scan in 
+  #load(filenames[p]) (HPC)
+  load(file_name)
+  
+  # Identify the gene
+  genesymbol = annotations.protein.192[index.protein,]$Associated.Gene.Name
+  
+  # Display progress by count and gene name to the user
+  #print(paste("Processing ",p," of ", length(filenames)," ",genesymbol, sep="")) (HPC)
+  
+  # Change the name of chromosome 20 in markers.64K to 'X' (DOQTL format) from '20' (qtl2 format) so that it can be compared with the chromosome in the protein annotations.
+  markers.64K$chr[markers.64K$chr=="20"] <- "X"
+  
+# Determine the closest SNP to the center of the gene and get its index in markers.64K (I should just pass this along with the data from the scan script in the future.)
+  closestSNP <- markers.64K[markers.64K$chr==gene_chr,][which.min(abs(mean(annotations.protein.192[index.protein,]$Gene.Start..bp., annotations.protein.192[index.protein,]$Gene.End..bp.) - markers.64K[which(markers.64K$chr==gene_chr),]$bp)),]  
+
+  index.closestSNP <- which(markers.64K$marker==closestSNP$marker)
+  
+  # Fill the results table with information about the gene of interest
+  results$ENSMUSP[p] <- annotations.protein.192$Ensembl.Protein.ID[index.protein]
+  results$ENSMUSG[p] <- annotations.rna.192$EnsemblID[index.rna]
+  results$Gene.Symbol[p] <- genesymbol
+  results$Gene.Chromosome[p] <- annotations.protein.192$Chromosome.Name[index.protein]
+  results$Gene.Start.Mbp[p] <- annotations.protein.192$Gene.Start..bp.[index.protein]
+  results$Gene.End.Mbp[p] <- annotations.protein.192$Gene.End..bp.[index.protein]
+  
+  # Fill the results table with information about the closest SNP.
+  results$Local.SNP.ID[p] <- markers.64K$marker[index.closestSNP]
+  results$Local.SNP.Chr[p] <- markers.64K$chr[index.closestSNP]
+  results$Local.SNP.Mbp[p] <- markers.64K$bp[index.closestSNP]
+  results$Local.SNP.cM[p] <- markers.64K$cM[index.closestSNP]
+  
+  # Fill the results table with the additive and interactive QTLs observed at the closest SNP. *Is this actually "the local SNP?"
+  results$LOD.AdditiveCovariatesOnly[p] <- round(lod.protein.addcovariatesonly[index.closestSNP], digits=2)
+  results$LOD.Diet.Interactive[p] <- round(lod.protein.dietint[index.closestSNP],digits=2)
+  results$Diet.LODdifference[p] <- round(lod.protein.dietint[index.closestSNP] - lod.protein.addcovariatesonly[index.closestSNP],digits=2)
+  results$LOD.Sex.Interactive[p] <- round(lod.protein.sexint[index.closestSNP],digits=2)
+  results$Sex.LODdifference[p] <- round(lod.protein.sexint[index.closestSNP] - lod.protein.addcovariatesonly[index.closestSNP],digits=2)
+  
+  #What was the concern about saving (correcting?) RData files?
+  #this save step below adds too much time for an interactive job, but we will want to correct these .RData files at some point.
+  #save(index.rna, index.protein, index.closestSNP, lod.rna.addcovariatesonly, lod.rna.dietint, lod.rna.sexint, lod.protein.addcovariatesonly, lod.protein.dietint, lod.protein.sexint, file = filenames[p])
+  
+}
+
+# Write table to file.
+write.table(results, "C:/Users/s-perkid/Desktop/DO192Liver/notebooks/DO192Liver_InteractivepQTL_LODscoresatLocalSNP.txt", col.names=NA,sep="\t")
+#write.table(results,"/hpcdata/scm/DO192Liver/DO192Liver_InteractivepQTL_LODscoresatLocalSNP.txt",col.names=NA,sep="\t") (HPC)
+print("Finished Successfully!")
+```
+
+
+### For "distant" SNPs/QTLs (maximum LOD score per chromosome) (HPC)
+**Script**: DO192QTL_LODCollate_IntScan_MaxLODonEachChromosome_7_7_v2.R  
+**Input**: ...DO192Liver.DietSexInts.RData (Also requires DO192 Liver Data)
+**Output**: 16 LOD Tables as .txt files:   
+        -Protein Diet LOD 4/5/7/any (4 tables)  
+        -Protein Sex LOD4/5/7/any (4 tables)  
+        -RNA-Diet-LOD4/5/7/any (4 tables)  
+        -RNA-Sex-LOD4/5/7/any (4 tables)  
+          
+Load and prepare an empty results table:
+```{r}
+# Make a list of all the filenames in the IntScans directory
+# filenames = dir(path = "/hpcdata/scm/DO192Liver/IntScans", pattern = "..DO192Liver.DietSexInts.RData") (HPC)
+
+# Make a temporary empty vector
+tmp = rep(0,0)
+
+# Initialize empty tables for each different result type.
+results.protein.diet.final = data.frame(ENSMUSP=tmp, ENSMUSG=tmp, Gene.Symbol=tmp,Gene.Chromosome=tmp,
+                           Gene.Start.Mbp=tmp, Gene.End.Mbp=tmp, Num.Samples.Expressed=tmp,
+                           SNP.ID=tmp,SNP.Chr=tmp,SNP.Mbp=tmp,SNP.cM=tmp,
+                           Protein.LOD.AdditiveCovariatesOnly=tmp,Protein.LOD.Diet.Interactive=tmp,Protein.LOD.Sex.Interactive=tmp,Protein.Diet.LODdifference=tmp,Protein.Sex.LODdifference=tmp,
+                           RNA.LOD.AdditiveCovariatesOnly=tmp,RNA.LOD.Diet.Interactive=tmp,RNA.LOD.Sex.Interactive=tmp,RNA.Diet.LODdifference=tmp,RNA.Sex.LODdifference=tmp)
+
+results.protein.sex.final = data.frame(ENSMUSP=tmp, ENSMUSG=tmp, Gene.Symbol=tmp,Gene.Chromosome=tmp,
+                           Gene.Start.Mbp=tmp, Gene.End.Mbp=tmp, Num.Samples.Expressed=tmp,
+                           SNP.ID=tmp,SNP.Chr=tmp,SNP.Mbp=tmp,SNP.cM=tmp,
+                           Protein.LOD.AdditiveCovariatesOnly=tmp,Protein.LOD.Diet.Interactive=tmp,Protein.LOD.Sex.Interactive=tmp,Protein.Diet.LODdifference=tmp,Protein.Sex.LODdifference=tmp,
+                           RNA.LOD.AdditiveCovariatesOnly=tmp,RNA.LOD.Diet.Interactive=tmp,RNA.LOD.Sex.Interactive=tmp,RNA.Diet.LODdifference=tmp,RNA.Sex.LODdifference=tmp)
+
+results.rna.diet.final = data.frame(ENSMUSP=tmp, ENSMUSG=tmp, Gene.Symbol=tmp,Gene.Chromosome=tmp,
+                           Gene.Start.Mbp=tmp, Gene.End.Mbp=tmp, Num.Samples.Expressed=tmp,
+                           SNP.ID=tmp,SNP.Chr=tmp,SNP.Mbp=tmp,SNP.cM=tmp,
+                           Protein.LOD.AdditiveCovariatesOnly=tmp,Protein.LOD.Diet.Interactive=tmp,Protein.LOD.Sex.Interactive=tmp,Protein.Diet.LODdifference=tmp,Protein.Sex.LODdifference=tmp,
+                           RNA.LOD.AdditiveCovariatesOnly=tmp,RNA.LOD.Diet.Interactive=tmp,RNA.LOD.Sex.Interactive=tmp,RNA.Diet.LODdifference=tmp,RNA.Sex.LODdifference=tmp)
+
+results.rna.sex.final = data.frame(ENSMUSP=tmp, ENSMUSG=tmp, Gene.Symbol=tmp,Gene.Chromosome=tmp,
+                           Gene.Start.Mbp=tmp, Gene.End.Mbp=tmp, Num.Samples.Expressed=tmp,
+                           SNP.ID=tmp,SNP.Chr=tmp,SNP.Mbp=tmp,SNP.cM=tmp,
+                           Protein.LOD.AdditiveCovariatesOnly=tmp,Protein.LOD.Diet.Interactive=tmp,Protein.LOD.Sex.Interactive=tmp,Protein.Diet.LODdifference=tmp,Protein.Sex.LODdifference=tmp,
+                           RNA.LOD.AdditiveCovariatesOnly=tmp,RNA.LOD.Diet.Interactive=tmp,RNA.LOD.Sex.Interactive=tmp,RNA.Diet.LODdifference=tmp,RNA.Sex.LODdifference=tmp)
+
+```
+
+
+Preparation of a temp results table, which will provide the data to the final tables:
+```{r}
+#for(p in 1:length(filenames)){ (HPC)
+#  load(filenames[p])  (HPC)
+
+# Pull gene info (Ensembl.P.ID, Ensembl.G.ID, Gene Name, Chromosome, Gene Start Bp, Gene End Bp)
+  gene.info = annotations.protein.192[index.protein,c(1,2,4,5,6,7)]
+
+# Display progress by count and gene name to the user (HPC)
+# print(paste("Processing ",p," of ", length(filenames)," ",gene.info[3], sep=""))
+  
+# Initialize an empty temp results table with 20 empty rows per column, one per chromosome. 
+tmp = rep(0,1) # Should be 0,20 in actual HPC runs to grab one max LOD per chromosome.
+results.tmp = data.frame(ENSMUSP=tmp, ENSMUSG=tmp, Gene.Symbol=tmp,Gene.Chromosome=tmp,
+                       Gene.Start.Mbp=tmp, Gene.End.Mbp=tmp, Num.Samples.Expressed=tmp,
+                       SNP.ID=tmp,SNP.Chr=tmp,SNP.Mbp=tmp,SNP.cM=tmp,
+                       Protein.LOD.AdditiveCovariatesOnly=tmp,Protein.LOD.Diet.Interactive=tmp,Protein.LOD.Sex.Interactive=tmp,Protein.Diet.LODdifference=tmp,Protein.Sex.LODdifference=tmp,
+                       RNA.LOD.AdditiveCovariatesOnly=tmp,RNA.LOD.Diet.Interactive=tmp,RNA.LOD.Sex.Interactive=tmp,RNA.Diet.LODdifference=tmp,RNA.Sex.LODdifference=tmp)
+  
+# Fill the temp results table with gene.info
+  results.tmp[,1:6] <- gene.info
+  
+# Determine the number of animals expressing the protein and add it to the temp results table.
+  num.expressed <- length(which(!is.na(expr.protein.192[,index.protein])))
+  results.tmp[,7] <- num.expressed
+  
+```
+
+Filling the rest of the temp results table and transferring the data to the final tables:
+** This is repeated for Sex:pQTL, Diet:eQTL, and Sex:eQTL. The scripts are already written.
+```{r}
+  ### Diet:pQTL
+   #for(g in c(1:20)){ (HPC)
+    g <- gene_chr
+
+    # Pull the SNPs from one chromosome.
+    snp.index <- which(markers.64K$chr==g)
+    snps = markers.64K[snp.index,]
+    
+    # Subset the protein LOD scores for the chromosome. 
+    lod.protein.dietint.sub <- round(lod.protein.dietint[snp.index],digits=2)
+    lod.protein.sexint.sub <- round(lod.protein.sexint[snp.index],digits=2)
+    lod.protein.addcovariatesonly.sub <- round(lod.protein.addcovariatesonly[snp.index],digits=2)
+    
+    # Subset the RNA LOD scores for the chromosome
+    lod.rna.dietint.sub <- round(lod.rna.dietint[snp.index],digits=2)
+    lod.rna.sexint.sub <- round(lod.rna.sexint[snp.index],digits=2)
+    lod.rna.addcovariatesonly.sub <- round(lod.rna.addcovariatesonly[snp.index],digits=2)
+    
+    # Calculate the differential diet/sex protein/RNA LOD scores.
+    protein.diet.diff = round(lod.protein.dietint.sub-lod.protein.addcovariatesonly.sub,digits=2)
+    protein.sex.diff = round(lod.protein.sexint.sub-lod.protein.addcovariatesonly.sub,digits=2)
+    rna.diet.diff = round(lod.rna.dietint.sub - lod.rna.addcovariatesonly.sub,digits=2)
+    rna.sex.diff = round(lod.rna.sexint.sub - lod.rna.addcovariatesonly.sub,digits=2)
+    
+    # Get the index of the maximum differential protein/diet LOD. *I'm not sure why I only did protein/diet.
+    max.diet.diff = which.max(protein.diet.diff)
+    
+    # Get the marker information for the SNP that had the highest protein/diet LOD on the chromosome.
+    results.tmp[g,8:11] <- snps[max.diet.diff,1:4]
+    
+    # Get the additive, sex & diet interactive, and sex & diet differential protein LOD scores for the marker with the highest protein/diet differential LOD.
+    # The most imporant column will be the protein.diet.diff, as that is the column that we searched for maximums in.
+    results.tmp[g,12] <- lod.protein.addcovariatesonly.sub[max.diet.diff]
+    results.tmp[g,13] <- lod.protein.dietint.sub[max.diet.diff]
+    results.tmp[g,14] <- lod.protein.sexint.sub[max.diet.diff]
+    results.tmp[g,15] <- protein.diet.diff[max.diet.diff]
+    results.tmp[g,16] <- protein.sex.diff[max.diet.diff]
+    
+    # Get the additive, sex & diet interactive, and sex & diet differential RNA LOD scores for the marker with the highest protein/diet differential LOD.
+    # These are less important, but would be interesting if they ever showed high rna.diet.diff - that would imply that the protein effect carried over from RNA.
+    results.tmp[g,17] <- lod.rna.addcovariatesonly.sub[max.diet.diff]
+    results.tmp[g,18] <- lod.rna.dietint.sub[max.diet.diff] 
+    results.tmp[g,19] <- lod.rna.sexint.sub[max.diet.diff]
+    results.tmp[g,20] <- rna.diet.diff[max.diet.diff]
+    results.tmp[g,21] <- rna.sex.diff[max.diet.diff]
+  #} (HPC)
+
+  # Set the final data table to be equivalent to results.tmp thus far (using rbind since the final data table was previously empty)
+  results.protein.diet.final = rbind(results.protein.diet.final, results.tmp)
+
+  ## Reset results table for the next use.
+  tmp <- rep(0,20)
+  results.tmp = data.frame(ENSMUSP=tmp, ENSMUSG=tmp, Gene.Symbol=tmp,Gene.Chromosome=tmp,
+                           Gene.Start.Mbp=tmp, Gene.End.Mbp=tmp, Num.Samples.Expressed=tmp,
+                           SNP.ID=tmp,SNP.Chr=tmp,SNP.Mbp=tmp,SNP.cM=tmp,
+                           Protein.LOD.AdditiveCovariatesOnly=tmp,Protein.LOD.Diet.Interactive=tmp,Protein.LOD.Sex.Interactive=tmp,Protein.Diet.LODdifference=tmp,Protein.Sex.LODdifference=tmp,
+                           RNA.LOD.AdditiveCovariatesOnly=tmp,RNA.LOD.Diet.Interactive=tmp,RNA.LOD.Sex.Interactive=tmp,RNA.Diet.LODdifference=tmp,RNA.Sex.LODdifference=tmp)
+  
+  results.tmp[,1:6] <- gene.info
+  num.expressed <- length(which(!is.na(expr.protein.192[,index.protein])))
+  results.tmp[,7] <- num.expressed
+```
+
+Finally, prune the data sets for a LOD score threshold of your liking and write to files.  
+**Parameterizing the threshold and automating the file name generation is a really good idea, esp. for interactive analysis**  
+In fact, this should just be two functions.  
+```{r}
+# Prune data below a certain LOD threshold.
+results.protein.diet.final.pruned4 <- results.protein.diet.final[results.protein.diet.final$Protein.Diet.LODdifference>4,]
+results.protein.diet.final.pruned5 <- results.protein.diet.final[results.protein.diet.final$Protein.Diet.LODdifference>5,]
+results.protein.diet.final.pruned7 <- results.protein.diet.final[results.protein.diet.final$Protein.Diet.LODdifference>7,]
+
+# Write data to files.
+write.table(results.protein.diet.final,"/hpcdata/scm/DO192Liver/DO192Liver_InteractiveDiet_pQTL_LODscoreDiffUnpruned.txt",col.names=NA,sep="\t")
+write.table(results.protein.diet.final.pruned4,"/hpcdata/scm/DO192Liver/DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove4.txt",col.names=NA,sep="\t")
+write.table(results.protein.diet.final.pruned5,"/hpcdata/scm/DO192Liver/DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove5.txt",col.names=NA,sep="\t")
+write.table(results.protein.diet.final.pruned7,"/hpcdata/scm/DO192Liver/DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove7.txt",col.names=NA,sep="\t")
+
+```
+
+# 3. Analysis
+### Manhattan Plots
+**Script**: Diet.eQTL.pQTL.ExampleScript_7_6.R  
+**Input**: ...DO192Liver.DietSexInts.RData (also requires DO192 Liver Data)  
+**Output**: Manhattan plots and allele effect/coefficient/founder plots (PDF or in RStudio)  
+```{r}
+# Load data if needed
+setwd("C:/Users/s-perkid/Desktop/DO192Liver/notebooks")
+load("C:/Users/s-perkid/Desktop/DO192Liver/data/DO192LiverData_Formattedfor_rQTL2.Rdata")
+
+# Set up variables for HF and chow analysis.
+# Divide mice into HF/chow and divide kinship matrices into HF/chow.
+chow.mice <- which(covariates.rna.192$Diet=="chow")
+hf.mice <- which(covariates.rna.192$Diet=="HF")
+K.LOCO.192.HF = kinship.probs(probs=probs.192[hf.mice,,],snps=markers.64K,bychr=T)
+K.LOCO.192.chow = kinship.probs(probs=probs.192[chow.mice,,],snps=markers.64K,bychr=T)
+
+# Select a list of genes to analyze:
+good.qtl <- c("Tmem68", "Ndufaf1", "Cct7", "Mtr", "Glul", "Xrcc6", "Elp3", "Aven", "Klc4")
+# chol.biosynth.1 <- c("Fdft1", "Sqle", "Lss", "Cyp51", "Tm7sf2", "Sc4mol", "Nsdhl", "Hsd17b7", "Ebp", "Dhcr24", "Sc5d")
+
+# Set up PDF output if desired:
+# pdf(file = "", pointsize=10) # Name pdf
+
+# Enter the gene list as my.gene.list and filter it for genes with both RNA and protein expression data.
+my.gene.list <-  good.qtl
+my.gene.list <- my.gene.list[(which(my.gene.list %in% annotations.protein.192$Associated.Gene.Name & my.gene.list %in% annotations.rna.192$Gene))]
+
+```
+
+Perform the actual plotting:  
+**I'm not sure yet what was going on with the AE plots when I plotted the HF AE on the chow chr
+```{r}
+total.time <- 0 
+for (my.gene in my.gene.list){ # This loop runs eQTL/AE and pQTL/AE for each gene. Generates 12pgs/gene, 18pgs/gene for duplicates (ie Mosdp2).
+  gene.start.time <- Sys.time()
+  ###eQTL analysis
+    target.rna.index <- which(annotations.rna.192$Gene == my.gene) ### find the index number for your gene of interest
+    annotations.rna.192[target.rna.index,]  ### Show information for the gene of interest
+    
+    #Chow eQTL
+    scanonechow.rna <- scanone(expr.rna.192[chow.mice,], pheno.col=target.rna.index,K=K.LOCO.192.chow, probs=probs.192[chow.mice,,], snps=markers.64K, addcovar=X.rna[,-1]) ## Perform the eQTL scan
+    plot(scanonechow.rna, main = paste(my.gene, paste("on chr", as.character(annotations.rna.192$Chr[target.rna.index])), "-", "chow", "-", "eQTL", seq = " ")) ## plot the chow eQTL LOD scores
+  
+    #HF eQTL
+    scanoneHF.rna <- scanone(expr.rna.192[hf.mice,], pheno.col=target.rna.index,K=K.LOCO.192.HF, probs=probs.192[hf.mice,,], snps=markers.64K, addcovar=X.rna[,-1]) ## Perform the eQTL scan
+    plot(scanoneHF.rna, main = paste(my.gene, paste("on chr", as.character(annotations.rna.192$Chr[target.rna.index])), "-", "high fat", "-", "eQTL", seq = " ")) ## plot the HF eQTL LOD scores
+  
+    #A little function to find the SNP maximizing LOD score (autosomes only) 
+    argmax.lod <- function(scanone.fit)
+    scanone.fit$lod$A$marker[which.max(scanone.fit$lod$A$lod)[1]]
+    
+    #(Chow AE / Chow chr) Let's plot the founder strain coefficients for the autosome with the peak LOD marker
+    argmax.chow.snp.rna <- argmax.lod(scanonechow.rna)
+    coefplot(scanonechow.rna, chr=markers.64K[argmax.chow.snp.rna,"chr"], main = paste(my.gene, paste("on chr", as.character(annotations.rna.192$Chr[target.rna.index])), "-", "chow AE / chow chr", "-", "eQTL", seq = " "))
+  
+    #(HF AE / Chow chr) Let's plot the founder strain coefficients for the autosome with the peak LOD marker
+    coefplot(scanoneHF.rna, chr=markers.64K[argmax.chow.snp.rna,"chr"], main = paste(my.gene, paste("on chr", as.character(annotations.rna.192$Chr[target.rna.index])), "-", "hf AE / chow chr", "-", "eQTL", seq = " "))
+  
+    #(Chow AE / HF chr) Let's plot the founder strain coefficients for the autosome with the peak LOD marker
+    argmax.hf.snp.rna <- argmax.lod(scanoneHF.rna)
+    coefplot(scanonechow.rna, chr=markers.64K[argmax.hf.snp.rna,"chr"], main = paste(my.gene, paste("on chr", as.character(annotations.rna.192$Chr[target.rna.index])), "-", "chow AE / hf chr", "-", "eQTL", seq = " "))
+  
+    #(HF AE / HF chr) Let's plot the founder strain coefficients for the autosome with the peak LOD marker
+    coefplot(scanoneHF.rna, chr=markers.64K[argmax.hf.snp.rna,"chr"], main = paste(my.gene, paste("on chr", as.character(annotations.rna.192$Chr[target.rna.index])), "-", "hf AE / hf chr", "-", "eQTL", seq = " "))
+  
+  ###pQTL analysis
+    target.protein.index <- which(annotations.protein.192$Associated.Gene.Name == my.gene)
+    
+    # For any proteins that have duplicates due to the strange nature of RNA, make plots for each variant.
+    if (length(target.protein.index) > 1)
+    {
+      for (i in target.protein.index)
+      {
+        #Chow pQTL
+        scanonechow.protein <- scanone(expr.protein.192[chow.mice,], pheno.col=i[1], K=K.LOCO.192.chow,probs=probs.192[chow.mice,,], snps=markers.64K, addcovar=X.protein[,-1])
+        plot(scanonechow.protein, main = paste(my.gene, "on chr", annotations.protein.192[i,]$Chromosome.Name, "-", "chow", "-", "pQTL", annotations.protein.192[i,]$Ensembl.Protein.ID, seq = " "))
+        
+        #HF pQTL
+        scanoneHF.protein <- scanone(expr.protein.192[hf.mice,], pheno.col=i[1], K=K.LOCO.192.HF,probs=probs.192[hf.mice,,], snps=markers.64K, addcovar=X.protein[,-1])
+        plot(scanoneHF.protein, main = paste(my.gene, "on chr", annotations.protein.192[i,]$Chromosome.Name, "-", "high fat", "-", "pQTL", annotations.protein.192[i,]$Ensembl.Protein.ID, seq = " "))
+        
+        #(Chow AE / Chow chr) effect plot for autosome with max. LOD
+        argmax.chow.snp.protein <- argmax.lod(scanonechow.protein)
+        coefplot(scanonechow.protein, chr=markers.64K[argmax.chow.snp.protein,"chr"], main = paste(my.gene, "on chr", as.character(annotations.protein.192$Chromosome.Name[i]), "-", "chow AE / chow chr", "-", "pQTL", annotations.protein.192$Ensembl.Protein.ID[i], seq = " "))
+        
+        #(HF AE / Chow chr) effect plot for autosome with max. LOD
+        coefplot(scanoneHF.protein, chr=markers.64K[argmax.chow.snp.protein,"chr"], main = paste(my.gene, "on chr", as.character(annotations.protein.192$Chromosome.Name[i]), "-", "hf AE / chow chr", "-", "pQTL", annotations.protein.192$Ensembl.Protein.ID[i], seq = " "))
+        
+        #(Chow AE / HF chr) effect plot for autosome with max. LOD
+        argmax.hf.snp.protein <- argmax.lod(scanoneHF.protein)
+        coefplot(scanonechow.protein, chr=markers.64K[argmax.hf.snp.protein,"chr"], main = paste(my.gene, "on chr", as.character(annotations.protein.192$Chromosome.Name[i]), "-", "chow AE / hf chr", "-", "pQTL", annotations.protein.192$Ensembl.Protein.ID[i], seq = " "))
+        
+        #(HF AE / HF chr) effect plot for autosome with max. LOD
+        coefplot(scanoneHF.protein, chr=markers.64K[argmax.hf.snp.protein,"chr"], main = paste(my.gene, "on chr", as.character(annotations.protein.192$Chromosome.Name[i]), "-", "hf AE / hf chr", "-", "pQTL", annotations.protein.192$Ensembl.Protein.ID[i], seq = " "))
+        
+      # Display computation time for the gene.
+        gene.end.time <- Sys.time()
+        gene.time <- gene.end.time - gene.start.time
+        total.time <- total.time + gene.time
+        print(paste(my.gene, "elapsed", gene.time, "minutes", seq = " "))
+      }
+    }
+    
+    # If there are no duplicates, make plots as normal (one pQTL plot per protein).
+    else
+    {
+      #Chow pQTL
+      scanonechow.protein <- scanone(expr.protein.192[chow.mice,], pheno.col=target.protein.index, K=K.LOCO.192.chow,probs=probs.192[chow.mice,,], snps=markers.64K, addcovar=X.protein[,-1])
+      plot(scanonechow.protein, main = paste(my.gene, "on chr", annotations.protein.192$Chromosome.Name[target.protein.index], "-", "chow", "-", "pQTL", seq = " "))
+      
+      #HF pQTL
+      scanoneHF.protein <- scanone(expr.protein.192[hf.mice,], pheno.col=target.protein.index, K=K.LOCO.192.HF,probs=probs.192[hf.mice,,], snps=markers.64K, addcovar=X.protein[,-1])
+      plot(scanoneHF.protein, main = paste(my.gene, "on chr", annotations.protein.192$Chromosome.Name[target.protein.index], "-", "high fat", "-", "pQTL", seq = " "))
+      
+      #(Chow AE / Chow chr) effect plot for autosome with max. LOD
+      argmax.chow.snp.protein <- argmax.lod(scanonechow.protein)
+      coefplot(scanonechow.protein, chr=markers.64K[argmax.chow.snp.protein,"chr"], main = paste(my.gene, paste("on chr", as.character(annotations.protein.192$Chromosome.Name[target.protein.index])), "-", "chow AE / chow chr", "-", "pQTL", seq = " "))
+      
+      #(HF AE / Chow chr) effect plot for autosome with max. LOD
+      coefplot(scanoneHF.protein, chr=markers.64K[argmax.chow.snp.protein,"chr"], main = paste(my.gene, paste("on chr", as.character(annotations.protein.192$Chromosome.Name[target.protein.index])), "-", "hf AE / chow chr", "-", "pQTL", seq = " ") )
+      
+      #(Chow AE / HF chr) effect plot for autosome with max. LOD
+      argmax.hf.snp.protein <- argmax.lod(scanoneHF.protein)
+      coefplot(scanonechow.protein, chr=markers.64K[argmax.hf.snp.protein,"chr"], main = paste(my.gene, paste("on chr", as.character(annotations.protein.192$Chromosome.Name[target.protein.index])), "-", "chow AE / hf chr", "-", "pQTL", seq = " "))
+      
+      #(HF AE / HF chr) effect plot for autosome with max. LOD
+      coefplot(scanoneHF.protein, chr=markers.64K[argmax.hf.snp.protein,"chr"], main = paste(my.gene, paste("on chr", as.character(annotations.protein.192$Chromosome.Name[target.protein.index])), "-", "hf AE / hf chr", "-", "pQTL", seq = " "))
+      
+      # Display computation time for the gene.
+      gene.end.time <- Sys.time()
+      gene.time <- gene.end.time - gene.start.time
+      total.time <- total.time + gene.time
+      print(paste(my.gene, "elapsed", gene.time, "minutes", seq = " "))
+    }
+}
+```
+
+### -ome Maps
+**Script**: PlottingScriptExample_Doug_Edited.R  
+**Input**: Collated/Filtered tables (ex. DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove7.tsv)  
+**Output**: Transcriptome and proteome maps.  
+
+```{r}
+# Read in tab-separated data tables.
+P.Diet.7 <- read.table(file = "DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove7.tsv", sep = '\t', header = TRUE)
+P.Diet.5 <- read.table(file = "DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove5.tsv", sep = '\t', header = TRUE)
+P.Diet.4 <- read.table(file = "DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove4.tsv", sep = '\t', header = TRUE)
+R.Diet.7 <- read.table(file = "DO192Liver_InteractiveDiet_eQTL_LODscoreDiffabove7.tsv", sep = '\t', header = TRUE)
+R.Diet.5 <- read.table(file = "DO192Liver_InteractiveDiet_eQTL_LODscoreDiffabove5.tsv", sep = '\t', header = TRUE)
+R.Diet.4 <- read.table(file = "DO192Liver_InteractiveDiet_eQTL_LODscoreDiffabove4.tsv", sep = '\t', header = TRUE)
+P.Sex.7 <- read.table(file = "DO192Liver_InteractiveSex_pQTL_LODscoreDiffabove7.tsv", sep = '\t', header = TRUE)
+P.Sex.5 <- read.table(file = "DO192Liver_InteractiveSex_pQTL_LODscoreDiffabove5.tsv", sep = '\t', header = TRUE)
+P.Sex.4 <- read.table(file = "DO192Liver_InteractiveSex_pQTL_LODscoreDiffabove4.tsv", sep = '\t', header = TRUE)
+R.Sex.7 <- read.table(file = "DO192Liver_InteractiveSex_eQTL_LODscoreDiffabove7.tsv", sep = '\t', header = TRUE)
+R.Sex.5 <- read.table(file = "DO192Liver_InteractiveSex_eQTL_LODscoreDiffabove5.tsv", sep = '\t', header = TRUE)
+R.Sex.4 <- read.table(file = "DO192Liver_InteractiveSex_eQTL_LODscoreDiffabove4.tsv", sep = '\t', header = TRUE)
+
+# Change X's to 20's. (DOQTL format -> qtl2 format)
+P.Diet.7[P.Diet.7$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Diet.7$Gene.Chromosome <- as.numeric(P.Diet.7$Gene.Chromosome)
+P.Diet.5[P.Diet.5$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Diet.5$Gene.Chromosome <- as.numeric(P.Diet.5$Gene.Chromosome)
+P.Diet.4[P.Diet.4$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Diet.4$Gene.Chromosome <- as.numeric(P.Diet.4$Gene.Chromosome)
+R.Diet.7[R.Diet.7$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Diet.7$Gene.Chromosome <- as.numeric(R.Diet.7$Gene.Chromosome)
+R.Diet.5[R.Diet.5$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Diet.5$Gene.Chromosome <- as.numeric(R.Diet.5$Gene.Chromosome)
+R.Diet.4[R.Diet.4$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Diet.4$Gene.Chromosome <- as.numeric(R.Diet.4$Gene.Chromosome)
+P.Sex.7[P.Sex.7$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Sex.7$Gene.Chromosome <- as.numeric(P.Sex.7$Gene.Chromosome)
+P.Sex.5[P.Sex.5$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Sex.5$Gene.Chromosome <- as.numeric(P.Sex.5$Gene.Chromosome)
+P.Sex.4[P.Sex.4$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Sex.4$Gene.Chromosome <- as.numeric(P.Sex.4$Gene.Chromosome)
+R.Sex.7[R.Sex.7$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Sex.7$Gene.Chromosome <- as.numeric(R.Sex.7$Gene.Chromosome)
+R.Sex.5[R.Sex.5$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Sex.5$Gene.Chromosome <- as.numeric(R.Sex.5$Gene.Chromosome)
+R.Sex.4[R.Sex.4$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Sex.4$Gene.Chromosome <- as.numeric(R.Sex.4$Gene.Chromosome)
+
+# Load samples expressed by at least 96 individuals.
+P.Diet.7.96 <- P.Diet.7[which(P.Diet.7$Num.Samples.Expressed>=96),]
+P.Diet.5.96 <- P.Diet.5[which(P.Diet.5$Num.Samples.Expressed>=96),]
+P.Diet.4.96 <- P.Diet.4[which(P.Diet.4$Num.Samples.Expressed>=96),]
+R.Diet.7.96 <- R.Diet.7[which(R.Diet.7$Num.Samples.Expressed>=96),]
+R.Diet.5.96 <- R.Diet.5[which(R.Diet.5$Num.Samples.Expressed>=96),]
+R.Diet.4.96 <- R.Diet.4[which(R.Diet.4$Num.Samples.Expressed>=96),]
+P.Sex.7.96 <- P.Sex.7[which(P.Sex.7$Num.Samples.Expressed>=96),]
+P.Sex.5.96 <- P.Sex.5[which(P.Sex.5$Num.Samples.Expressed>=96),]
+P.Sex.4.96 <- P.Sex.4[which(P.Sex.4$Num.Samples.Expressed>=96),]
+R.Sex.7.96 <- R.Sex.7[which(R.Sex.7$Num.Samples.Expressed>=96),]
+R.Sex.5.96 <- R.Sex.5[which(R.Sex.5$Num.Samples.Expressed>=96),]
+R.Sex.4.96 <- R.Sex.4[which(R.Sex.4$Num.Samples.Expressed>=96),]
+
+# Load samples expressed by at least 192 individuals.
+P.Diet.7.192 <- P.Diet.7[which(P.Diet.7$Num.Samples.Expressed>=192),]
+P.Diet.5.192 <- P.Diet.5[which(P.Diet.5$Num.Samples.Expressed>=192),]
+P.Diet.4.192 <- P.Diet.4[which(P.Diet.4$Num.Samples.Expressed>=192),]
+R.Diet.7.192 <- R.Diet.7[which(R.Diet.7$Num.Samples.Expressed>=192),]
+R.Diet.5.192 <- R.Diet.5[which(R.Diet.5$Num.Samples.Expressed>=192),]
+R.Diet.4.192 <- R.Diet.4[which(R.Diet.4$Num.Samples.Expressed>=192),]
+P.Sex.7.192 <- P.Sex.7[which(P.Sex.7$Num.Samples.Expressed>=192),]
+P.Sex.5.192 <- P.Sex.5[which(P.Sex.5$Num.Samples.Expressed>=192),]
+P.Sex.4.192 <- P.Sex.4[which(P.Sex.4$Num.Samples.Expressed>=192),]
+R.Sex.7.192 <- R.Sex.7[which(R.Sex.7$Num.Samples.Expressed>=192),]
+R.Sex.5.192 <- R.Sex.5[which(R.Sex.5$Num.Samples.Expressed>=192),]
+R.Sex.4.192 <- R.Sex.4[which(R.Sex.4$Num.Samples.Expressed>=192),]
+
+# Make a vector of graph titles. I'll parameterize this too.
+title.vector <- c("Protein | Diet | LOD>=4 | N>=96", "RNA | Diet | LOD>=4 | N>=96", "Protein | Diet | LOD>=5 | N>=96", "RNA | Diet | LOD>=5 | N>=96", "Protein | Diet | LOD>=7 | N>=96", "RNA | Diet | LOD>=7 | N>=96",
+                  "Protein | Diet | LOD>=4 | N>=192", "RNA | Diet | LOD>=4 | N>=192", "Protein | Diet | LOD>=5 | N>=192", "RNA | Diet | LOD>=5 | N>=192", "Protein | Diet | LOD>=7 | N>=192", "RNA | Diet | LOD>=7 | N>=192",
+                  "Protein | Sex | LOD>=4 | N>=96", "RNA | Sex | LOD>=4 | N>=96", "Protein | Sex | LOD>=5 | N>=96", "RNA | Sex | LOD>=5 | N>=96", "Protein | Sex | LOD>=7 | N>=96", "RNA | Sex | LOD>=7 | N>=96",
+                  "Protein | Sex | LOD>=4 | N>=192", "RNA | Sex | LOD>=4 | N>=192", "Protein | Sex | LOD>=5 | N>=192", "RNA | Sex | LOD>=5 | N>=192", "Protein | Sex | LOD>=7 | N>=192", "RNA | Sex | LOD>=7 | N>=192")
+
+# Make a vector of file names.
+filename.vector <- c("Protein.Diet.LOD4.N96", "RNA.Diet.LOD4.N96", "Protein.Diet.LOD5.N96", "RNA.Diet.LOD5.N96", "Protein.Diet.LOD7.N96", "RNA.Diet.LOD7.N96",
+                     "Protein.Diet.LOD4.N192", "RNA.Diet.LOD4.N192", "Protein.Diet.LOD5.N192", "RNA.Diet.LOD5.N192", "Protein.Diet.LOD7.N192", "RNA.Diet.LOD7.N192",
+                     "Protein.Sex.LOD4.N96", "RNA.Sex.LOD4.N96", "Protein.Sex.LOD5.N96", "RNA.Sex.LOD5.N96", "Protein.Sex.LOD7.N96", "RNA.Sex.LOD7.N96",
+                     "Protein.Sex.LOD4.N192", "RNA.Sex.LOD4.N192", "Protein.Sex.LOD5.N192", "RNA.Sex.LOD5.N192", "Protein.Sex.LOD7.N192", "RNA.Sex.LOD7.N192")
+
+# subset.list <- list(P.Diet.4.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Diet.4.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), P.Diet.5.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Diet.5.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), P.Diet.7.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Diet.7.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp),
+#                     P.Diet.4.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Diet.4.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), P.Diet.5.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Diet.5.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), P.Diet.7.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Diet.7.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp),
+#                     P.Sex.4.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Sex.4.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), P.Sex.5.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Sex.5.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), P.Sex.7.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Sex.7.96 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp),
+#                     P.Sex.4.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Sex.4.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), P.Sex.5.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Sex.5.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), P.Sex.7.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp), R.Sex.7.192 %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp))
+
+subset.list <- list(P.Diet.4.96, R.Diet.4.96, P.Diet.5.96, R.Diet.5.96, P.Diet.7.96, R.Diet.7.96,
+                    P.Diet.4.192, R.Diet.4.192, P.Diet.5.192, R.Diet.5.192, P.Diet.7.192, R.Diet.7.192,
+                    P.Sex.4.96, R.Sex.4.96, P.Sex.5.96, R.Sex.5.96, P.Sex.7.96, R.Sex.7.96,
+                    P.Sex.4.192, R.Sex.4.192, P.Sex.5.192, R.Sex.5.192, P.Sex.7.192, R.Sex.7.192)
+
+pdf("-ome-test3-alpha0-1.pdf",width=8,height=8)
+for (j in 1:24)
+{
+  # From the other transcriptome script.
+  # Make a subset of the collated output of the original scan containing only the affected protein ENSMUSP and info about the QTL SNP.
+  qtl <- subset.list[[j]] %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp)
+  
+  # Order the subset by chromosome and position on the chromosome in Mbp.
+  qtl <- qtl[order(qtl$SNP.Chr, qtl$SNP.Mbp),]
+  
+   # Add a column onto the collated output table with the center of the affected gene. one.obj temporarily stores all of the data from each table in one object, and is probably unnecessary.
+  subset.list[[j]] <- mutate(subset.list[[j]], Gene.Mbp = rowMeans(subset.list[[j]] %>% select(Gene.Start.Mbp, Gene.End.Mbp)))
+  one.obj <- subset.list[[j]] %>% select(ENSMUSP, Gene.Symbol, SNP.ID, Gene.Chromosome, SNP.Chr, Gene.Start.Mbp, Gene.End.Mbp, Gene.Mbp, SNP.Mbp, Protein.Diet.LODdifference, Protein.Sex.LODdifference, RNA.Diet.LODdifference, RNA.Sex.LODdifference)
+  
+  # Make an annotations table for the affected protein.
+  annot=one.obj[,c(1,4,6,7)] # ENSMUSP, Gene.Chr, Gene.Start.Mbp, Gene.End.Mbp
+  
+  qtl[,3]   = sub("X", "20", qtl[,3]) # qtl[,3] is Max.SNP.Chr. Change X to 20.
+  annot[,2] = sub("X", "20", annot[,2]) # annot[,2] is Gene.Chr. Change X to 20.
+  qtl[,3] = as.numeric(qtl[,3]) # Make column numeric now that Xs are 20s.
+  annot[,2] = as.numeric(annot[,2]) # Make column numeric now that Xs are 20s.
+  qtl = qtl[order(qtl[,3],qtl[,4]),] # Order QTLs by Max.SNP.Chr and SNP.Location
+  annot = annot[order(annot[,2],annot[,3]),] # Order annot by Gene.Chr, Gene.Start.Mbp
+  
+  # Load mouse chromosome lengths
+  load("Chrlen_GRCm38.Rdata")
+  
+  # GMB pQTL Local Overlap (FOR QTL OBJECT) - Not sure what GMB is.
+  chrlen = chrlen.copy
+  names(chrlen)[20]="20"
+  mb  = qtl[,4]
+  gmb = mb
+  qtl[,3] = as.character(qtl[,3]) # Change Max.SNP.Chr back to characters?
+  unique.chr = unique(qtl[,3]) # Unique chromosomes
+  chrlen = chrlen[names(chrlen) %in% unique.chr] # Filter out any chromosomes without data?
+  if(max(chrlen) > 200) {
+    chrlen = chrlen * 1e-6
+  } # if(max(chrlen) > 200), change to Mbp instead of bp
+  chrlen = cumsum(chrlen) # Important for plotting QTL positions on one continuous axis.
+  chrlen = c(0, chrlen) 
+  chrmid = chrlen[-length(chrlen)] + (diff(chrlen) * 0.5) # Get the middle of each chromosome
+  # Add the preceeding chromosome lengths to each SNP position. - Yields the whole-genomic position of the marker.
+  for(c in 2:length(unique.chr)) { 
+    rows = which(qtl[,3] == unique.chr[c])
+    gmb[rows] = gmb[rows] + chrlen[c]
+  } # for(c)
+  gmb.qtl = gmb
+  
+  # FOR ANNOT OBJECT
+  chrlen = chrlen.copy
+  names(chrlen)[20]="20"
+  mb  = annot[,3]
+  gmb = mb
+  annot[,2] = as.character(annot[,2])
+  unique.chr = unique(annot[,2])
+  chrlen = chrlen[names(chrlen) %in% unique.chr]
+  if(max(chrlen) > 200) {
+    chrlen = chrlen * 1e-6
+  } # if(max(chrlen) > 200)
+  chrlen = cumsum(chrlen)
+  chrlen = c(0, chrlen)
+  chrmid = chrlen[-length(chrlen)] + (diff(chrlen) * 0.5)
+  # Add the preceeding chromosome lengths to each SNP position.
+  for(c in 2:length(unique.chr)) {
+    rows = which(annot[,2] == unique.chr[c])
+    gmb[rows] = gmb[rows] + chrlen[c]
+  } # for(c)
+  gmb.protein = gmb
+  m = match(qtl[,1],annot[,1])
+  gmb.protein = gmb.protein[m]
+  
+  chrlen = chrlen.copy
+  if(max(chrlen) > 200) {
+    chrlen = chrlen * 1e-6
+  } # if(max(chrlen) > 200)
+  chrlen = cumsum(chrlen)
+  chrlen = c(0, chrlen)
+  chrmid = chrlen[-length(chrlen)] + (diff(chrlen) * 0.5)
+  
+  # Create the plot.
+  #layout(mat = matrix(1:2, nrow=1,ncol = 2))
+  par(font = 2, font.lab = 2, font.axis = 2, las = 1, mar=c(5,5,1,1)+0.1)
+  
+  #par(font = 2, font.lab = 2, font.axis = 2, las = 1,
+  #    plt = c(0.12, 0.9, 0.12, 0.9), lend = 2)
+  
+  plot(gmb.qtl, xlim = c(-20, max(chrlen)+20), ylim = c(-20, max(chrlen)+20), col = 0,
+       xaxs = "i", yaxs = "i",ylab="",xlab="", xaxt="n",yaxt="n")
+
+  if (j%%2==0)
+  {
+    mtext("Transcript Location", side=2, line=2,las=0,cex=1.7)
+    mtext("eQTL Location", side=1, line=2,cex=1.7)
+  }
+  else 
+  {
+    mtext("Peptide Location", side=2, line=2,las=0,cex=1.7)
+    mtext("pQTL Location", side=1, line=2,cex=1.7)
+  }
+
+  title(main = title.vector[j], cex.main = 1)
+  # mtext("pQTL", side=3, line=2, cex=1.4)
+  # abline(h = chrlen, col = "grey80")
+  # abline(v = chrlen, col = "grey80")
+  usr = par("usr")
+  par(xpd = NA)
+  txt.loc = usr[2] + (usr[2] - usr[1]) * 0.02
+  # text(chrmid, txt.loc, names(chrlen)[-1])
+  # text(txt.loc, chrmid, names(chrlen)[-1])
+  mtext(names(chrlen)[-1],at=chrmid, side=1,line=0.3,cex=1)
+  mtext(names(chrlen)[-1],at=chrmid, side=2,line=0.7,cex=1)
+  par(xpd = F)
+  if (j %in% c(1, 2, 3, 4, 7, 8, 9, 10, 13, 14, 15, 16, 19, 20, 21, 22)) ### Lower alpha for graphs with more data.
+  {  
+    if (j%%2==0)
+    {
+      points(gmb.qtl,gmb.protein,pch=20,cex=1.5,lwd=1,col=rgb(0,0.9,0,0.1))
+    }
+    if (j%%2==1)
+    {
+      points(gmb.qtl,gmb.protein,pch=20,cex=1.5,lwd=1,col=rgb(0,0,0.9,0.1))
+    }
+  }
+  else 
+  {
+    if (j%%2==0)
+    {
+      points(gmb.qtl,gmb.protein,pch=20,cex=1.5,lwd=1,col=rgb(0,0.9,0,0.4))
+    }
+    if (j%%2==1)
+    {
+      points(gmb.qtl,gmb.protein,pch=20,cex=1.5,lwd=1,col=rgb(0,0,0.9,0.4))
+    }
+  }
+  par(xpd = NA)
+  rect(usr[1], usr[3], usr[2], usr[4], lwd = 1, border = 1)
+}
+
+dev.off()
+```
+
+
+### Sliding Window Plots
+**Script**: Transcriptome_Map_Sliding_Window_7_19.R,  
+            Transcriptome_Map_Sliding_Window_7_19_hpc.R  
+            
+**Input**: Collated/Filtered tables (ex: DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove7.tsv),  
+           Chromosome lengths (Chrlen_GRCm38.Rdata)  
+**Output**: RNA/Protein_Diet/Sex_LOD4/5/6/7_N96/192_PTB.Rdata (ex: Protein_Diet_LOD4_N96_PTB.Rdata)   
+```{r}
+# Read in tab-separated data tables.
+setwd("C:/Users/s-perkid/Desktop/DO192Liver/notebooks")
+P.Diet.7 <- read.table(file = "DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove7.tsv", sep = '\t', header = TRUE)
+P.Diet.5 <- read.table(file = "DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove5.tsv", sep = '\t', header = TRUE)
+P.Diet.4 <- read.table(file = "DO192Liver_InteractiveDiet_pQTL_LODscoreDiffabove4.tsv", sep = '\t', header = TRUE)
+R.Diet.7 <- read.table(file = "DO192Liver_InteractiveDiet_eQTL_LODscoreDiffabove7.tsv", sep = '\t', header = TRUE)
+R.Diet.5 <- read.table(file = "DO192Liver_InteractiveDiet_eQTL_LODscoreDiffabove5.tsv", sep = '\t', header = TRUE)
+R.Diet.4 <- read.table(file = "DO192Liver_InteractiveDiet_eQTL_LODscoreDiffabove4.tsv", sep = '\t', header = TRUE)
+P.Sex.7 <- read.table(file = "DO192Liver_InteractiveSex_pQTL_LODscoreDiffabove7.tsv", sep = '\t', header = TRUE)
+P.Sex.5 <- read.table(file = "DO192Liver_InteractiveSex_pQTL_LODscoreDiffabove5.tsv", sep = '\t', header = TRUE)
+P.Sex.4 <- read.table(file = "DO192Liver_InteractiveSex_pQTL_LODscoreDiffabove4.tsv", sep = '\t', header = TRUE)
+R.Sex.7 <- read.table(file = "DO192Liver_InteractiveSex_eQTL_LODscoreDiffabove7.tsv", sep = '\t', header = TRUE)
+R.Sex.5 <- read.table(file = "DO192Liver_InteractiveSex_eQTL_LODscoreDiffabove5.tsv", sep = '\t', header = TRUE)
+R.Sex.4 <- read.table(file = "DO192Liver_InteractiveSex_eQTL_LODscoreDiffabove4.tsv", sep = '\t', header = TRUE)
+
+# Change Xs to 20s. (DOQTL format -> qtl2 format)
+P.Diet.7[P.Diet.7$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Diet.7$Gene.Chromosome <- as.numeric(P.Diet.7$Gene.Chromosome)
+P.Diet.5[P.Diet.5$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Diet.5$Gene.Chromosome <- as.numeric(P.Diet.5$Gene.Chromosome)
+P.Diet.4[P.Diet.4$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Diet.4$Gene.Chromosome <- as.numeric(P.Diet.4$Gene.Chromosome)
+R.Diet.7[R.Diet.7$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Diet.7$Gene.Chromosome <- as.numeric(R.Diet.7$Gene.Chromosome)
+R.Diet.5[R.Diet.5$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Diet.5$Gene.Chromosome <- as.numeric(R.Diet.5$Gene.Chromosome)
+R.Diet.4[R.Diet.4$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Diet.4$Gene.Chromosome <- as.numeric(R.Diet.4$Gene.Chromosome)
+P.Sex.7[P.Sex.7$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Sex.7$Gene.Chromosome <- as.numeric(P.Sex.7$Gene.Chromosome)
+P.Sex.5[P.Sex.5$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Sex.5$Gene.Chromosome <- as.numeric(P.Sex.5$Gene.Chromosome)
+P.Sex.4[P.Sex.4$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+P.Sex.4$Gene.Chromosome <- as.numeric(P.Sex.4$Gene.Chromosome)
+R.Sex.7[R.Sex.7$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Sex.7$Gene.Chromosome <- as.numeric(R.Sex.7$Gene.Chromosome)
+R.Sex.5[R.Sex.5$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Sex.5$Gene.Chromosome <- as.numeric(R.Sex.5$Gene.Chromosome)
+R.Sex.4[R.Sex.4$Gene.Chromosome=="X",]$Gene.Chromosome <- 20
+R.Sex.4$Gene.Chromosome <- as.numeric(R.Sex.4$Gene.Chromosome)
+
+# Subset transcripts/proteins where N>=96 expressing. This is a bad way to do this. The next version will allow choice of any value for each parameter.
+P.Diet.7.96 <- P.Diet.7[which(P.Diet.7$Num.Samples.Expressed>=96),]
+P.Diet.5.96 <- P.Diet.5[which(P.Diet.5$Num.Samples.Expressed>=96),]
+P.Diet.4.96 <- P.Diet.4[which(P.Diet.4$Num.Samples.Expressed>=96),]
+R.Diet.7.96 <- R.Diet.7[which(R.Diet.7$Num.Samples.Expressed>=96),]
+R.Diet.5.96 <- R.Diet.5[which(R.Diet.5$Num.Samples.Expressed>=96),]
+R.Diet.4.96 <- R.Diet.4[which(R.Diet.4$Num.Samples.Expressed>=96),]
+P.Sex.7.96 <- P.Sex.7[which(P.Sex.7$Num.Samples.Expressed>=96),]
+P.Sex.5.96 <- P.Sex.5[which(P.Sex.5$Num.Samples.Expressed>=96),]
+P.Sex.4.96 <- P.Sex.4[which(P.Sex.4$Num.Samples.Expressed>=96),]
+R.Sex.7.96 <- R.Sex.7[which(R.Sex.7$Num.Samples.Expressed>=96),]
+R.Sex.5.96 <- R.Sex.5[which(R.Sex.5$Num.Samples.Expressed>=96),]
+R.Sex.4.96 <- R.Sex.4[which(R.Sex.4$Num.Samples.Expressed>=96),]
+
+# Subset transcripts/proteins where N>=192 expressing. This is a bad way to do this. The next version will allow choice of any value for each parameter.
+P.Diet.7.192 <- P.Diet.7[which(P.Diet.7$Num.Samples.Expressed>=192),]
+P.Diet.5.192 <- P.Diet.5[which(P.Diet.5$Num.Samples.Expressed>=192),]
+P.Diet.4.192 <- P.Diet.4[which(P.Diet.4$Num.Samples.Expressed>=192),]
+R.Diet.7.192 <- R.Diet.7[which(R.Diet.7$Num.Samples.Expressed>=192),]
+R.Diet.5.192 <- R.Diet.5[which(R.Diet.5$Num.Samples.Expressed>=192),]
+R.Diet.4.192 <- R.Diet.4[which(R.Diet.4$Num.Samples.Expressed>=192),]
+P.Sex.7.192 <- P.Sex.7[which(P.Sex.7$Num.Samples.Expressed>=192),]
+P.Sex.5.192 <- P.Sex.5[which(P.Sex.5$Num.Samples.Expressed>=192),]
+P.Sex.4.192 <- P.Sex.4[which(P.Sex.4$Num.Samples.Expressed>=192),]
+R.Sex.7.192 <- R.Sex.7[which(R.Sex.7$Num.Samples.Expressed>=192),]
+R.Sex.5.192 <- R.Sex.5[which(R.Sex.5$Num.Samples.Expressed>=192),]
+R.Sex.4.192 <- R.Sex.4[which(R.Sex.4$Num.Samples.Expressed>=192),]
+
+# Prep graph titles for each combination of parameters. This is a bad way to do this. The next version will allow choice of any value for each parameter.
+title.vector <- c("Protein | Diet | LOD>=4 | N>=96", "RNA | Diet | LOD>=4 | N>=96", "Protein | Diet | LOD>=5 | N>=96", "RNA | Diet | LOD>=5 | N>=96", "Protein | Diet | LOD>=7 | N>=96", "RNA | Diet | LOD>=7 | N>=96",
+                  "Protein | Diet | LOD>=4 | N>=192", "RNA | Diet | LOD>=4 | N>=192", "Protein | Diet | LOD>=5 | N>=192", "RNA | Diet | LOD>=5 | N>=192", "Protein | Diet | LOD>=7 | N>=192", "RNA | Diet | LOD>=7 | N>=192",
+                  "Protein | Sex | LOD>=4 | N>=96", "RNA | Sex | LOD>=4 | N>=96", "Protein | Sex | LOD>=5 | N>=96", "RNA | Sex | LOD>=5 | N>=96", "Protein | Sex | LOD>=7 | N>=96", "RNA | Sex | LOD>=7 | N>=96",
+                  "Protein | Sex | LOD>=4 | N>=192", "RNA | Sex | LOD>=4 | N>=192", "Protein | Sex | LOD>=5 | N>=192", "RNA | Sex | LOD>=5 | N>=192", "Protein | Sex | LOD>=7 | N>=192", "RNA | Sex | LOD>=7 | N>=192")
+
+# Prep filename titles for each combination of parameters.
+filename.vector <- c("Protein_Diet_LOD4_N96_PTB", "RNA_Diet_LOD4_N96_PTB", "Protein_Diet_LOD5_N96_PTB", "RNA_Diet_LOD5_N96_PTB", "Protein_Diet_LOD7_N96_PTB", "RNA_Diet_LOD7_N96_PTB",
+                  "Protein_Diet_LOD4_N192_PTB", "RNA_Diet_LOD4_N192_PTB", "Protein_Diet_LOD5_N192_PTB", "RNA_Diet_LOD5_N192_PTB", "Protein_Diet_LOD7_N192_PTB", "RNA_Diet_LOD7_N192_PTB",
+                  "Protein_Sex_LOD4_N96_PTB", "RNA_Sex_LOD4_N96_PTB", "Protein_Sex_LOD5_N96_PTB", "RNA_Sex_LOD5_N96_PTB", "Protein_Sex_LOD7_N96_PTB", "RNA_Sex_LOD7_N96_PTB",
+                  "Protein_Sex_LOD4_N192_PTB", "RNA_Sex_LOD4_N192_PTB", "Protein_Sex_LOD5_N192_PTB", "RNA_Sex_LOD5_N192_PTB", "Protein_Sex_LOD7_N192_PTB", "RNA_Sex_LOD7_N192_PTB")
+
+# Prep list of subset datasets foe each combination of parameters.
+subset.list <- list(P.Diet.4.96, R.Diet.4.96, P.Diet.5.96, R.Diet.5.96, P.Diet.7.96, R.Diet.7.96,
+                    P.Diet.4.192, R.Diet.4.192, P.Diet.5.192, R.Diet.5.192, P.Diet.7.192, R.Diet.7.192,
+                    P.Sex.4.96, R.Sex.4.96, P.Sex.5.96, R.Sex.5.96, P.Sex.7.96, R.Sex.7.96,
+                    P.Sex.4.192, R.Sex.4.192, P.Sex.5.192, R.Sex.5.192, P.Sex.7.192, R.Sex.7.192)
+
+# Load chromosome length file.
+load("Chrlen_GRCm38.Rdata")
+for (k in 1:24)
+{
+  ## Get the mouse chromosome lengths.
+  chrlen = chrlen.copy
+  chrlen = chrlen * 1e-6
+  chrlen = chrlen[names(chrlen) %in% c(1:19, "X")]
+  
+  # Change Xs to 20s
+  names(chrlen) = sub("X", "20", names(chrlen))
+  chrlen = c(0,chrlen)  # Important for plotting the QTL positions on one continuous axis
+  chrlen2 = cumsum(chrlen) # Important for plotting the QTL positions on one continuous axis
+  
+  # Make a subset of the collated output of the original scan containing only the affected protein ENSMUSP and info about the QTL SNP.
+  qtl <- subset.list[[k]] %>% select(ENSMUSP, SNP.ID, SNP.Chr, SNP.Mbp)
+  
+  # Order the subset (by SNP chromosome and then SNP Mbp, so that it displays the genomic order of the QTL SNPs linearly).
+  qtl <- qtl[order(qtl$SNP.Chr, qtl$SNP.Mbp),]
+  
+  # Add a column onto the collated output table with the center of the affected gene. one.obj temporarily stores all of the data from each table in one object, and is probably unnecessary.
+  subset.list[[k]] <- mutate(subset.list[[k]], Gene.Mbp = rowMeans(subset.list[[k]] %>% select(Gene.Start.Mbp, Gene.End.Mbp)))
+  one.obj <- subset.list[[k]] %>% select(ENSMUSP, Gene.Symbol, SNP.ID, Gene.Chromosome, SNP.Chr, Gene.Start.Mbp, Gene.End.Mbp, Gene.Mbp, SNP.Mbp, Protein.Diet.LODdifference, Protein.Sex.LODdifference, RNA.Diet.LODdifference, RNA.Sex.LODdifference)
+  
+  ## Sliding window histogram of eQTL counts - Checking for regions with many QTLs. The window size should be parameterized, and refers to the size in Mbp.
+  counts = as.list(1:20)
+  window.size.mb <- 5
+  
+  for (i in 1:20) 
+  {
+    # Subset qtl to get the chromosome and Mbp of only the markers on the chromosome specified (by i).
+    temp = qtl[qtl[,3]==i,3:4]
+    #temp[,2] = temp[,2]*1e-6 # This is only necessary if the 3rd column of qtl is in bp, not Mbp. Translates bp to Mbp.
+    
+    # Make a sequence of midpoints in the chromosome, starting at 2.5 and ending 2.5 away from the end of the chromosome. This 2.5 is a result of the window being 5 Mbp wide - this should be parameterized (sort of already is as window.size.mb)
+    mids = seq(2.5,chrlen[i+1]-2.5,1)
+    
+    # Make a table to count the number of QTL markers that are within the window centered on each point in the mids table.
+    counts[[i]] = cbind(mids,rep(0,length(mids)))
+    
+    # Get the number of QTLs whose location in bp are between the lower and upper bounds of each window.
+    for (j in 1:length(mids)) 
+    {
+      counts[[i]][j,2] = sum(temp[,2] >= mids[j]-(window.size.mb/2) & temp[,2] < mids[j]+(window.size.mb/2)) # specifies a 5Mb window
+    }
+    # For chromosomes other than chr1, adjust base pair numbers so that they represent total distance on the genome.
+    counts[[i]][,1] = counts[[i]][,1]+chrlen2[i]
+  }
+  
+  index = 1
+  
+  # Get the number of QTL markers per chromosome.
+  ct.len = sapply(counts,nrow)
+  
+  # Make a matrix of the number of QTLs per chromosome(?)
+  qtlcounts = matrix(0,sum(sapply(counts,nrow)[[1]]),4) # The [[1]] is just for testing it without a full list.
+  
+  # Fill the matrix with chromosome, position, QTL count, and ...
+  for (i in 1:20) 
+  {
+    rng = index:(index+ct.len[[i]]-1)
+    qtlcounts[rng,1] = rep(i,ct.len[i])
+    qtlcounts[rng,2:3] = counts[[i]]
+    index = max(rng)+1
+   }
+  
+  ## Create the possible.trans.bands object, identifying the closest SNP to the window Mbp and the closest gene to that SNP. I'm not sure that this part is important. The closest gene to the SNP may not matter because they are actually pseudomarkers, not real SNPs.
+  possible.trans.bands <- qtlcounts[qtlcounts[,3] >= 10,] ### At least 10 QTLs in the 5Mb window. Should be parameterized.
+  for (l in 1:9)
+  {
+    possible.trans.bands <- cbind(possible.trans.bands, rep(0, nrow(possible.trans.bands)))
+  }
+  
+  # Set possible.trans.bands column names.
+  colnames(possible.trans.bands) <- c("window.chr", "window.mbp", "window.qtlcount", "window.mbp.on.chr", "likely.snp.chr", "likely.snp.mbp", "likely.snp.id", "likely.gene.chr", "likely.gene.mbp", "likely.gene.start.mbp", "likely.gene.end.mbp", "likely.gene.sym", "likely.gene.ensmusp")
+  
+  # Set the window.mbp.on.chr column to be equal to the window.mbp values - this will be corrected in the following code.
+  possible.trans.bands[,4] <- possible.trans.bands[,2]
+
+  # Fix the window.mbp.on.chr column and add all of the columns remaining to possible.trans.bands. This seems very disorganized and I'm sure that the next version will improve on this - I can't remember why one.obj is needed rather than just a reset of p.t.b.
+  for(n in 1:nrow(possible.trans.bands))
+  {
+    for (m in 1:possible.trans.bands[n,1]) 
+    {
+      possible.trans.bands[n,4] <- as.numeric(possible.trans.bands[n,4]) - chrlen[m]
+    }
+    possible.trans.bands[n,5] <- one.obj[one.obj$SNP.Chr==as.numeric(possible.trans.bands[[n,1]]),][which.min(abs(one.obj[one.obj$SNP.Chr==as.numeric(possible.trans.bands[[n,1]]),]$SNP.Mbp - as.numeric(possible.trans.bands[[n,4]]))),]$SNP.Chr
+    possible.trans.bands[n,6] <- one.obj[one.obj$SNP.Chr==as.numeric(possible.trans.bands[[n,1]]),][which.min(abs(one.obj[one.obj$SNP.Chr==as.numeric(possible.trans.bands[[n,1]]),]$SNP.Mbp - as.numeric(possible.trans.bands[[n,4]]))),]$SNP.Mbp
+    possible.trans.bands[n,7] <- one.obj[one.obj$SNP.Chr==as.numeric(possible.trans.bands[[n,1]]),][which.min(abs(one.obj[one.obj$SNP.Chr==as.numeric(possible.trans.bands[[n,1]]),]$SNP.Mbp - as.numeric(possible.trans.bands[[n,4]]))),]$SNP.ID
+    possible.trans.bands[n,8] <- one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),][which.min(abs(one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),]$Gene.Mbp - as.numeric(possible.trans.bands[[n,4]]))),]$Gene.Chromosome
+    possible.trans.bands[n,9] <- one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),][which.min(abs(one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),]$Gene.Mbp - as.numeric(possible.trans.bands[[n,4]]))),]$Gene.Mbp
+    possible.trans.bands[n,10] <- one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),][which.min(abs(one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),]$Gene.Mbp - as.numeric(possible.trans.bands[[n,4]]))),]$Gene.Start.Mbp
+    possible.trans.bands[n,11] <- one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),][which.min(abs(one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),]$Gene.Mbp - as.numeric(possible.trans.bands[[n,4]]))),]$Gene.End.Mbp
+    possible.trans.bands[n,12] <- one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),][which.min(abs(one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),]$Gene.Mbp - as.numeric(possible.trans.bands[[n,4]]))),]$Gene.Symbol
+    possible.trans.bands[n,13] <- one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),][which.min(abs(one.obj[one.obj$Gene.Chromosome==as.numeric(possible.trans.bands[[n,1]]),]$Gene.Mbp - as.numeric(possible.trans.bands[[n,4]]))),]$ENSMUSP
+  }
+  
+  # Make another table, possible.trans.qtl, of all of the data contained in one.obj, but ONLY for the markers that appeared to be trans band sources (those nearest to the windows with >=10 QTLs)
+  possible.trans.qtl <- one.obj[one.obj$SNP.ID%in%possible.trans.bands[,7],]
+  
+  file.name <- paste0(filename.vector[k], ".RData", collapse=" ")
+  save(qtlcounts, possible.trans.bands, possible.trans.qtl, one.obj, file = file.name)
+}
+```
+
+
+### Coefficient/Allele Effect/Founder Plots(?)
+**Script:** scanint_one_coef_rna_protein_Perkins_7_12.R
+**Input:** DO192LiverData_Formattedfor_rQTL2.Rdata
+**Output:** ...DO192Liver.Coef.DietSexInts.RData 
+
+```{r}
+#cores.num = 1
+
+# Scan for LOD scores from beg to end in proteins and the corresponding RNA.
+for (j in beg:end) {
+  index.protein <- j
+  index.rna <- which(annotations.rna.192$EnsemblID==annotations.protein.192[index.protein,]$Ensembl.Gene)
+  gene.chromosome <- annotations.protein.192[index.protein,]$Chromosome.Name
+  index.closestSNP <- which.min(abs(mean(annotations.protein.192[index.protein,]$Gene.Start..bp., annotations.protein.192[index.protein,]$Gene.End..bp.) - markers.64K[which(markers.64K$chr==annotations.protein.192[index.protein,]$Chromosome.Name),]$bp))
+  mice.with.data.p <- !is.na(expr.protein.192[,index.protein]) # Only subset mice with protein expression data.
+  K.LOCO.192.chr.p <- K.LOCO.qtl2
+  
+  K.LOCO.192.chr.r <- K.LOCO.qtl2
+  mice.with.data.r <- !is.na(expr.rna.192[,index.rna])
+  
+  cat("Scanning ", j, " out of ", nrow(annotations.protein.192), " ",annotations.protein.192$Associated.Gene.Name[j], "\n")
+
+  for (chromosome in 1:20)
+  {
+     K.LOCO.192.chr.p[[chromosome]] <- K.LOCO.qtl2[[chromosome]][mice.with.data.p,mice.with.data.p] # Kinship at this chromosome for mice with expr data.
+  }  
+    
+  addcovar.p <- model.matrix(~ Sex + Diet, data=covariates.protein.192[mice.with.data.p, ])
+  intcovar.sex.p <- model.matrix(~ Sex, data=covariates.protein.192[mice.with.data.p, ])
+  intcovar.diet.p <- model.matrix(~ Diet, data=covariates.protein.192[mice.with.data.p, ])
+  addcovar.r <- model.matrix(~ Sex + Diet, data=covariates.rna.192[mice.with.data.r, ])
+  intcovar.sex.r <- model.matrix(~ Sex, data=covariates.rna.192[mice.with.data.r, ])
+  intcovar.diet.r <- model.matrix(~ Diet, data=covariates.rna.192[mice.with.data.r, ])
+  
+  for (chromosome in 1:20)
+  {
+     K.LOCO.192.chr.r[[chromosome]] <- K.LOCO.qtl2[[chromosome]][mice.with.data.r,mice.with.data.r]
+  }
+
+
+  ##### SCAN COEFFICIENTS
+  lod.protein.addcovariatesonly.coef <- list(rep(0,20))
+  lod.protein.dietint.coef <- list(rep(0,20))
+  lod.protein.sexint.coef <- list(rep(0,20))
+  lod.rna.addcovariatesonly.coef <- list(rep(0,20))
+  lod.rna.dietint.coef <- list(rep(0,20))
+  lod.rna.sexint.coef <- list(rep(0,20))
+  
+  ### COEFFICIENTS / PROTEIN / Sex and Diet Additive Covariates Only
+  for (chromosome in 1:19)
+  {
+  lod.protein.addcovariatesonly.coef[[chromosome]] <- scan1coef(genoprobs=probs[mice.with.data.p, chromosome], 
+                                                     kinship=K.LOCO.192.chr.p[[chromosome]],
+                                                     pheno=expr.protein.192[mice.with.data.p, index.protein],
+                                                     addcovar=addcovar.p[,-1],
+                                                     #cores=cores.num,
+                                                     reml=TRUE)
+  }
+  lod.protein.addcovariatesonly.coef[[20]] <- scan1coef(genoprobs=probs[mice.with.data.p, "X"], 
+                                                     kinship=K.LOCO.192.chr.p[[20]],
+                                                     pheno=expr.protein.192[mice.with.data.p, index.protein],
+                                                     addcovar=addcovar.p[,-1],
+                                                     #cores=cores.num,
+                                                     reml=TRUE)
+
+  ### COEFFICIENTS / PROTEIN / Diet Interactive
+  for (chromosome in 1:19)
+  {
+  lod.protein.dietint.coef[[chromosome]] <- scan1coef(genoprobs=probs[mice.with.data.p, chromosome], 
+                                        kinship=K.LOCO.192.chr.p[[chromosome]],
+                                        pheno=expr.protein.192[mice.with.data.p, index.protein],
+                                        addcovar=addcovar.p[,-1],
+                                        intcovar=intcovar.diet.p[,-1],
+                                        #cores=cores.num,
+                                        reml=TRUE)
+  }
+  lod.protein.dietint.coef[[20]] <- scan1coef(genoprobs=probs[mice.with.data.p, "X"], 
+                                        kinship=K.LOCO.192.chr.p[[20]],
+                                        pheno=expr.protein.192[mice.with.data.p, index.protein],
+                                        addcovar=addcovar.p[,-1],
+                                        intcovar=intcovar.diet.p[,-1],
+                                        #cores=cores.num,
+                                        reml=TRUE)
+  
+  ### COEFFICIENTS / PROTEIN / Sex Interactive
+  for (chromosome in 1:19)
+  {
+    lod.protein.sexint.coef[[chromosome]] <- scan1coef(genoprobs=probs[mice.with.data.p, chromosome], 
+                                                 kinship=K.LOCO.192.chr.p[[chromosome]],
+                                                 pheno=expr.protein.192[mice.with.data.p, index.protein],
+                                                 addcovar=addcovar.p[,-1],
+                                                 intcovar=intcovar.sex.p[,-1],
+                                                 #cores=cores.num,
+                                                 reml=TRUE)
+  }
+  lod.protein.sexint.coef[[20]] <- scan1coef(genoprobs=probs[mice.with.data.p, "X"], 
+                                                 kinship=K.LOCO.192.chr.p[[20]],
+                                                 pheno=expr.protein.192[mice.with.data.p, index.protein],
+                                                 addcovar=addcovar.p[,-1],
+                                                 intcovar=intcovar.sex.p[,-1],
+                                                 #cores=cores.num,
+                                                 reml=TRUE)
+
+  ### COEFFICIENTS / RNA / Sex and Diet Additive Covariates Only
+  
+  for (chromosome in 1:19) 
+  {
+    lod.rna.addcovariatesonly.coef[[chromosome]] <- scan1coef(genoprobs=probs[mice.with.data.r,chromosome], 
+                                                 kinship=K.LOCO.192.chr.r[[chromosome]],
+                                                 pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                                 addcovar=addcovar.r[,-1],
+                                                 #cores=cores.num,
+                                                 reml=TRUE)
+  }
+      lod.rna.addcovariatesonly.coef[[20]] <- scan1coef(genoprobs=probs[mice.with.data.r,"X"], 
+                                                 kinship=K.LOCO.192.chr.r[[20]],
+                                                 pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                                 addcovar=addcovar.r[,-1],
+                                                 #cores=cores.num,
+                                                 reml=TRUE)
+  
+  ### COEFFICIENTS / RNA / Diet Interactive
+  for (chromosome in 1:19)
+  {
+    lod.rna.dietint.coef[[chromosome]] <- scan1coef(genoprobs=probs[mice.with.data.r,chromosome], 
+                                       kinship=K.LOCO.192.chr.r[[chromosome]],
+                                       pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                       addcovar=addcovar.r[,-1],
+                                       intcovar=intcovar.diet.r[,-1],
+                                       #cores=cores.num,
+                                       reml=TRUE)
+  }
+  lod.rna.dietint.coef[[20]] <- scan1coef(genoprobs=probs[mice.with.data.r,"X"], 
+                                       kinship=K.LOCO.192.chr.r[[20]],
+                                       pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                       addcovar=addcovar.r[,-1],
+                                       intcovar=intcovar.diet.r[,-1],
+                                       #cores=cores.num,
+                                       reml=TRUE)
+  
+  ### COEFFICIENTS / RNA / Sex Interactive
+  for (chromosome in 1:19)
+  {
+    lod.rna.sexint.coef[[chromosome]] <- scan1coef(genoprobs=probs[mice.with.data.r,chromosome], 
+                                             kinship=K.LOCO.192.chr.r[[chromosome]],
+                                             pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                             addcovar=addcovar.r[,-1],
+                                             intcovar=intcovar.sex.r[,-1],
+                                             #cores=cores.num,
+                                             reml=TRUE)
+  }
+  lod.rna.sexint.coef[[20]] <- scan1coef(genoprobs=probs[mice.with.data.r,"X"], 
+                                             kinship=K.LOCO.192.chr.r[[20]],
+                                             pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                             addcovar=addcovar.r[,-1],
+                                             intcovar=intcovar.sex.r[,-1],
+                                             #cores=cores.num,
+                                             reml=TRUE)
+                                             
+   # Round values to 3 decimal places.
+   lod.protein.addcovariatesonly.coef.round <- lapply(lod.protein.addcovariatesonly.coef, round, 3)
+   lod.protein.dietint.coef.round <- lapply(lod.protein.dietint.coef, round, 3)
+   lod.protein.sexint.coef.round <- lapply(lod.protein.sexint.coef, round, 3)
+   lod.rna.addcovariatesonly.coef.round <- lapply(lod.rna.addcovariatesonly.coef, round, 3)
+   lod.rna.dietint.coef.round <- lapply(lod.rna.dietint.coef, round, 3)
+   lod.rna.sexint.coef.round <- lapply(lod.rna.sexint.coef, round, 3)
+
+  
+  file_name <- paste(annotations.protein.192[index.protein,]$Associated.Gene.Name, "_", annotations.protein.192[index.protein,]$Ensembl.Protein.ID, ".DO192Liver.Coef.DietSexInts.RData", sep="")
+  save(index.rna, index.protein, index.closestSNP, lod.rna.addcovariatesonly.coef.round, lod.rna.dietint.coef.round, lod.rna.sexint.coef.round, lod.protein.addcovariatesonly.coef.round, lod.protein.dietint.coef.round, lod.protein.sexint.coef.round, file = file_name)
+  cat("Done scanning ", j, " out of ", nrow(annotations.protein.192), " ",annotations.protein.192$Associated.Gene.Name[j], "\n")
+  
+}
+```
+
+### Mediation Analysis
+**Script**: eQTL.pQTL.Mediation.Examplescript (not ready for use, just where the code chunk came from)  
+**Input**: ...DO192Liver.DietSexInts.RData (also requires DO192 Liver Data)  
+**Output**: Manhattan plots and allele effect/coefficient/founder plots.  
+```{r}
+install_github("dmgatti/DOQTL")
+install_github("simecek/intermediate")
+install_github("kbroman/qtlcharts")
+
+library(DOQTL)
+library(intermediate)
+library(qtlcharts)
+
+###################################################################################################
+
+my.gene <- "Tmem68"  ### Input your gene of interest
+
+target.rna.index <- which(annotations.rna.192$Gene == my.gene) ### find the index number for your gene of interest
+annotations.rna.192[target.rna.index,]  ### Show information for the gene of interest
+scanone.rna <- scanone(expr.rna.192, pheno.col=target.rna.index,K=K.LOCO.192, probs=probs.192, snps=markers.64K, addcovar=X.rna[,-1]) ## Perform the eQTL scan
+
+###################################################################################################
+
+###################################################################################################
+# Mediation Scan
+
+#Requires:
+#### target - numeric vector with transcript/protein expression
+#### mediator - matrix, each column is one transcript/protein's expression
+#### annotation - data.frame with mediator annotation, must include columns "chr" and "pos"
+#### qtl.geno - matrix, haplotype probabilities at the QTL we want to mediate
+#### covar - additive covariates
+#### method = c("ignore", "lod-diff", "double-lod-diff", "lod-ratio")  ### we prefer "double-lod-diff"
+
+
+## 3) Mediation Scan - Condition distant pQTL on protein intermediates
+y <- expr.protein.192[,target.protein.index]
+geno.argmax.protein <- probs.192[,-1,argmax.snp.protein]
+
+# trim annotation, calculate middle point
+annot.protein <- annotations.protein.192[,c("Ensembl.Protein.ID", "Ensembl.Gene.ID", "Associated.Gene.Name")]
+annot.protein$Chr <- annotations.protein.192$Chromosome.Name
+annot.protein$Pos <- (annotations.protein.192$Gene.Start..bp. + annotations.protein.192$Gene.End..bp.)/2
+
+med <- mediation.scan(target=y, mediator=expr.protein.192, annotation=annot.protein, 
+                            covar=X.protein[,-1], qtl.geno=geno.argmax.protein,method="double-lod-diff")
+kplot(med) #Interactive Plot - Hover over points to see gene symbols
+plot(med)  #Static plot
+
+## 4) Mediation Scan - Condition distant pQTL on transcript intermediates
+
+# trim annotation, calculate middle point
+annot.rna <- annotations.rna.192[,c("EnsemblID", "Gene", "Chr")]
+colnames(annot.rna) = c("Ensemble.Gene.ID","Associated.Gene.Name","Chr")
+annot.rna$Pos <- (annotations.rna.192$Start.Mbp + annotations.rna.192$End.Mbp)/2
+
+med <- mediation.scan(target=y, mediator=expr.rna.192, annotation=annot.rna, 
+                            covar=X.protein[,-1], qtl.geno=geno.argmax.protein)
+
+kplot(med)  #Interactive Plot - Hover over points to see gene symbols
+plot(med)   #Static plot
+
+######################################################################################################
+
+
+```
+
+
+# 4. Network Analysis
+### STRING
+### Ingenuity Pathway Analysis (IPA)
+### Gene Ontology Enrichment Analysis
+##### R GO analysis
