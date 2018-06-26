@@ -184,49 +184,62 @@ for (gene_name in gene.names$V1){
 ## PLOT 
 
 Here we will create a plot for each scan. The scan data (generated above) will be iterated through to create the plots. Each three scans will be faceted into one plot, one for RNA and one for protein. These two plots will be saved into a file with the specific gene name in the 'Plots' folder.
-```{r}
+```{r, eval=F}
 
 # Establish a set path to use for this code chunk 
 scans_path <- '/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/D0192Liver/Data/Output/'
 
-
 # Generate list of scan file names 
 scan_file_names <- list.files(paste(scans_path,'Scans', sep = ""))
 
-# Iterate through
+# Set the working directory to '/Scans'
+setwd(paste(scans_path,'Scans', sep = ""))
+
+# Establish a global counter variable (g) to be used later to iterate through gene names 
+g <- 1
+
+# Create two directories in the '/Plots' folder. One for RNA and one for proteins. 
+setwd(paste(scans_path, "Plots", sep= ""))
+dir.create(paste(scans_path, "Plots/", "Proteins",  sep= ""))
+dir.create(paste(scans_path, "Plots/", "RNA",  sep= ""))
+
+# Iterate through files in the list of file names 
 for (f in scan_file_names){
   
-  # Load the file to be able to access the scan data 
-  load(f)
+  # Use the list of Gene names to name the files
+  gene_names <-  gene.names
+  gene_file_name <-  paste(gene_names[[1]][g]) # Use the counter to locate the gene in the list
+  print(gene_file_name)
+  g <- g + 1 # Add to the counter so the next for loop uses the next gene 
   
-  # Set the working directory to the '/Output/Plots' folder 
-  setwd(paste(scans_path, "Plots", sep= ""))
-
-  # Make a new folder for the gene and its plots
-  dir.create(paste(scans_path, "Plots", f, sep ="" ))
+  # Print to test
+  print(g)
+  
+  # Load the file to be able to access the scan data 
+  load(paste(scans_path, "Scans/", f, sep = ""))
   
   ##PLOT##
   
     #RNA#
   
   # Set the working directory to put the plots in
-  setwd(paste(scans_path, "Plots", f, sep ="" ))
+  setwd(paste(scans_path, "Plots/", "RNA", sep =""))
   
   # Establish the graphical device that base R will send the plot to 
-  png(paste(f, "_RNA", sep =""), height = 780, width = 780 )
+  png(paste(gene_file_name), height = 780, width = 780 )
   
   # Set the number of rows to 3 and columns to 1
   par(mfrow= c(3,1))
   
   # Create 3 plots with 3 threshold lines
-  plot(x = lod.rna.addcovariatesonly, map = map, main = paste(f, "~Sex + Diet + Tag", "RNA"))
+  plot(x = lod.rna.addcovariatesonly, map = map, main = paste(gene_file_name, "~Sex + Diet", "RNA"))
   abline(h = 4, col = "red", lwd = 2)
   
-  plot(x = lod.rna.dietint, map = map, main = paste(f, "Diet Int", "RNA"))
+  plot(x = lod.rna.dietint, map = map, main = paste(gene_file_name, "Diet Int", "RNA"))
   abline(h = 4, col = "red", lwd = 2)
   abline(h = 7, col = "yellow", lwd = 2)
   
-  plot(x = lod.rna.sexint, map = map, main = paste(f, "Sex Int", "RNA"))
+  plot(x = lod.rna.sexint, map = map, main = paste(gene_file_name, "Sex Int", "RNA"))
   abline(h = 4, col = "red", lwd = 2)
   abline(h = 7, col = "yellow", lwd = 2)
   abline(h = 10, col = "black", lwd = 2)
@@ -236,30 +249,33 @@ for (f in scan_file_names){
     #PROTEIN#
   
   # Set the working directory to put the plots in
-  setwd(paste(scans_path, "Plots", f, sep ="" ))
+  setwd(paste(scans_path, "Plots/", "Proteins", sep ="" ))
   
   # Establish the graphical device that base R will send the plot to 
-  png(paste(scans_path, "Plots", f, "_Protein", sep ="" ))
+  png(paste(gene_file_name), height = 780, width = 780 )
   
   # Set the number of rows to 3 and columns to 1
   par(mfrow= c(3,1))
   
   # Create 3 plots with 3 threshold lines
-  plot(x = lod.protein.addcovariatesonly, map = map, main = paste(f, "~Sex + Diet + Tag", "Protein"))
-  abline(h = 4, col = "red", lwd = 2)
-  
-  plot(x = lod.protein.dietint, map = map, main = paste(f, "Diet Int", "Protein"))
+  plot(x = lod.protein.addcovariatesonly, map = map, main = paste(gene_file_name, "~Sex + Diet + Tag", "Protein"))
   abline(h = 4, col = "red", lwd = 2)
   abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
   
-  plot(x = lod.protein.sexint, map = map, main = paste(f, "Sex Int", "Protein"))
+  plot(x = lod.protein.dietint, map = map, main = paste(gene_file_name, "Diet Int", "Protein"))
+  abline(h = 4, col = "red", lwd = 2)
+  abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
+  
+  plot(x = lod.protein.sexint, map = map, main = paste(gene_file_name, "Sex Int", "Protein"))
   abline(h = 4, col = "red", lwd = 2)
   abline(h = 7, col = "yellow", lwd = 2)
   abline(h = 10, col = "black", lwd = 2)
   
   dev.off()
   
-  cat("Done with", " ", f)
+  cat("Done with", gene_file_name, "\n")
 }
 
 ```
