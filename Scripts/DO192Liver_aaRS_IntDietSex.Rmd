@@ -232,14 +232,17 @@ for (f in scan_file_names){
   par(mfrow= c(3,1))
   
   # Create 3 plots with 3 threshold lines
-  plot(x = lod.rna.addcovariatesonly, map = map, main = paste(gene_file_name, "~Sex + Diet", "RNA"))
-  abline(h = 4, col = "red", lwd = 2)
-  
-  plot(x = lod.rna.dietint, map = map, main = paste(gene_file_name, "Diet Int", "RNA"))
+  plot(x = lod.rna.addcovariatesonly, map = map, main = paste(gene_file_name, "~Sex + Diet", "RNA"), ylim = c(0,30))
   abline(h = 4, col = "red", lwd = 2)
   abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
   
-  plot(x = lod.rna.sexint, map = map, main = paste(gene_file_name, "Sex Int", "RNA"))
+  plot(x = lod.rna.dietint, map = map, main = paste(gene_file_name, "Diet Int", "RNA"), ylim = c(0,30))
+  abline(h = 4, col = "red", lwd = 2)
+  abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
+  
+  plot(x = lod.rna.sexint, map = map, main = paste(gene_file_name, "Sex Int", "RNA"), ylim = c(0,30))
   abline(h = 4, col = "red", lwd = 2)
   abline(h = 7, col = "yellow", lwd = 2)
   abline(h = 10, col = "black", lwd = 2)
@@ -258,17 +261,17 @@ for (f in scan_file_names){
   par(mfrow= c(3,1))
   
   # Create 3 plots with 3 threshold lines
-  plot(x = lod.protein.addcovariatesonly, map = map, main = paste(gene_file_name, "~Sex + Diet + Tag", "Protein"))
+  plot(x = lod.protein.addcovariatesonly, map = map, main = paste(gene_file_name, "~Sex + Diet + Tag", "Protein"), ylim = c(0,40))
   abline(h = 4, col = "red", lwd = 2)
   abline(h = 7, col = "yellow", lwd = 2)
   abline(h = 10, col = "black", lwd = 2)
   
-  plot(x = lod.protein.dietint, map = map, main = paste(gene_file_name, "Diet Int", "Protein"))
+  plot(x = lod.protein.dietint, map = map, main = paste(gene_file_name, "Diet Int", "Protein"), ylim = c(0,40))
   abline(h = 4, col = "red", lwd = 2)
   abline(h = 7, col = "yellow", lwd = 2)
   abline(h = 10, col = "black", lwd = 2)
   
-  plot(x = lod.protein.sexint, map = map, main = paste(gene_file_name, "Sex Int", "Protein"))
+  plot(x = lod.protein.sexint, map = map, main = paste(gene_file_name, "Sex Int", "Protein"), ylim = c(0,40))
   abline(h = 4, col = "red", lwd = 2)
   abline(h = 7, col = "yellow", lwd = 2)
   abline(h = 10, col = "black", lwd = 2)
