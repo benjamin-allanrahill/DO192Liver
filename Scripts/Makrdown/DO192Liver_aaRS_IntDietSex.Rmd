@@ -1,0 +1,284 @@
+---
+title: "DO192Liver_aatRNA_synt"
+author: "Ben Allan-Rahill"
+date: "6/22/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 0. Packages and Settings
+```{r}
+# Install packages
+# This is all from the Manhattan/AE plot script.
+install_packages(devtools)
+library(devtools)
+install_github("dmgatti/DOQTL")
+source("https://bioconductor.org/biocLite.R")
+biocLite("BSgenome.Mmusculus.UCSC.mm10")
+install_github("simecek/intermediate")
+install_github("kbroman/qtlcharts")
+install.packages(tidyverse)
+```
+
+```{r}
+library(qtl2)
+# library(intermediate)
+library(dplyr)
+library(ggplot2)
+#The following aren't necessary yet.
+#library(qtl2db)
+```
+Load required packages.  
+[Download rqtl2 if needed.](http://kbroman.org/qtl2/)
+
+```{r}
+options(stringsAsFactors = F)
+```
+Set strings to not be factors to avoid problems with data frames containing character vectors.
+
+### Load data
+```{r}
+load("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/D0192Liver/Data/Input/DO192LiverData_Formattedfor_rQTL2.Rdata")
+gene.names <- read.csv("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/D0192Liver/Data/Input/aa-tRNA_Sequence_Names.csv", header = FALSE)
+```
+
+# 1. Scan
+
+### Locally and with one gene.
+**Script**: scanint_one_rna_protein_Perkins_7_6.R - needs to be edited to have specific gene choice instead of BEG:END, if it matters.
+        also did not previously have a method to get the actual closest SNP, only the index of that SNP.  
+**Input**: DO192 Liver Data  
+**Output**: ...DO192Liver.DietSexInts.RData (1 file) 
+
+This only scans RNA that have corresponding protein measurements.
+
+
+
+```{r, eval=F}
+
+## Establish global variables that do not need to be the for loop
+  
+# Set the number of processor cores to be used. Use 1 on the HPC.
+cores.num = 1
+
+```
+
+### Main For Loop:
+
+```{r, eval=F}
+# Iterate through data structure of specific gene names and run the scan process for each. 
+for (gene_name in gene.names$V1){
+
+
+  # Get the gene's index in the protein and rna data.
+    index.protein <- which(annotations.protein.192$Associated.Gene.Name == gene_name)
+    index.rna <- which(annotations.rna.192$Gene == gene_name)
+    
+    # Get the chromosome that the gene is on
+    gene_chr <- annotations.protein.192[index.protein,]$Chromosome.Name  
+    
+    # Determine the SNP closest to the center of the gene.
+    #closestSNP <- markers.64K[markers.64K$chr==gene_chr,][which.min(abs(mean(annotations.protein.192[index.protein,]$Gene.Start..bp., annotations.protein.192[index.protein,]$Gene.End..bp.) - markers.64K[which(markers.64K$chr==gene_chr),]$bp)),]
+    
+  # Only subset mice with protein expression data. I don't remember what issue this prevented.
+    mice.with.data.r <- !is.na(expr.rna.192[,index.rna])
+    mice.with.data.p <- !is.na(expr.protein.192[,index.protein])
+    
+    
+  # Set up kinship matrices for the mice that have data for your given RNA/protein. Does it need to be for all chromosomes?
+    
+    
+    K.LOCO.192.chr.r <- K.LOCO.qtl2
+    K.LOCO.192.chr.p <- K.LOCO.qtl2
+    for (chromosome in 1:20){
+      K.LOCO.192.chr.r[[chromosome]]<- K.LOCO.qtl2[[chromosome]][mice.with.data.r,mice.with.data.r]
+    }
+    for (chromosome in 1:20){
+      K.LOCO.192.chr.p[[chromosome]] <- K.LOCO.qtl2[[chromosome]][mice.with.data.p,mice.with.data.p]
+    }  
+    
+    # Set up additive and interactive covariates for RNA/protein, only mice with data.
+    addcovar.r <- model.matrix(~ Sex + Diet, data=covariates.rna.192[mice.with.data.r, ])
+    intcovar.sex.r <- model.matrix(~ Sex, data=covariates.rna.192[mice.with.data.r, ])
+    intcovar.diet.r <- model.matrix(~ Diet, data=covariates.rna.192[mice.with.data.r, ])
+    
+    addcovar.p <- model.matrix(~ Sex + Diet + Tag, data=covariates.protein.192[mice.with.data.p, ])
+    intcovar.sex.p <- model.matrix(~ Sex, data=covariates.protein.192[mice.with.data.p, ])
+    intcovar.diet.p <- model.matrix(~ Diet, data=covariates.protein.192[mice.with.data.p, ])
+    
+   
+    
+    # Perform QTL/LOD scans for RNA/protein in conditions of additive, interactive diet, and interactive sex covariates.
+      # RNA
+      # Scan / RNA / Additive covariate: Sex & Diet
+      lod.rna.addcovariatesonly <- scan1(genoprobs=probs[mice.with.data.r,],
+                                         kinship=K.LOCO.192.chr.r,
+                                         pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                         addcovar=addcovar.r[,-1],
+                                         cores=cores.num, reml=TRUE)
+    
+      
+      # Scan / RNA / Interactive covariate: Diet
+      lod.rna.dietint <- scan1(genoprobs=probs[mice.with.data.r,],
+                                kinship=K.LOCO.192.chr.r,
+                                pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                addcovar=addcovar.r[,-1],
+                                intcovar=intcovar.diet.r[,-1],
+                                cores=cores.num, reml=TRUE)
+    
+      
+      # Scan / RNA / Interactive covariate: Sex
+      lod.rna.sexint <- scan1(genoprobs=probs[mice.with.data.r,],
+                              kinship=K.LOCO.192.chr.r,
+                              pheno=expr.rna.192[mice.with.data.r,index.rna],
+                              addcovar=addcovar.r[,-1],
+                              intcovar=intcovar.sex.r[,-1],
+                              cores=cores.num, reml=TRUE)
+      
+      # PROTEIN
+      # Scan / Protein / Additive covariate: Sex & Diet
+      lod.protein.addcovariatesonly <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                              kinship=K.LOCO.192.chr.p,
+                                              pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                              addcovar=addcovar.p[,-1],
+                                              cores=cores.num, reml=TRUE)
+      
+    
+      
+      # Scan / Protein / Interactive covariate: Diet
+      lod.protein.dietint <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                    kinship=K.LOCO.192.chr.p,
+                                    pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                    addcovar=addcovar.p[,-1],
+                                    intcovar=intcovar.diet.p[,-1],
+                                    cores=cores.num, reml=TRUE)
+      
+      
+      # Scan / Protein / Interactive covariate: Sex
+      lod.protein.sexint <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                  kinship=K.LOCO.192.chr.p, 
+                                  pheno=expr.protein.192[mice.with.data.p,index.protein], 
+                                  addcovar=addcovar.p[,-1], 
+                                  intcovar=intcovar.sex.p[,-1], 
+                                  cores=cores.num, reml=TRUE)
+      
+      # Systematically name the file.
+      file_name <- paste(annotations.protein.192[index.protein,]$Associated.Gene.Name, "_", annotations.protein.192[index.protein,]$Ensembl.Protein.ID, ".DO192Liver.DietSexInts.RData", sep="")
+      
+      # Set the working directory (FOR THIS NOTEBOOK ONLY)
+      setwd("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/D0192Liver/Data/Output")
+      
+      # Save the scan data to the file.
+      save(index.rna, index.protein, lod.rna.addcovariatesonly, lod.rna.dietint, lod.rna.sexint, lod.protein.addcovariatesonly, lod.protein.dietint, lod.protein.sexint, file = file_name)
+      
+      # Print to the console to know where we are in the data 
+      
+      cat("Finished gene:", gene_name, "\n")
+    
+}
+```
+
+## PLOT 
+
+Here we will create a plot for each scan. The scan data (generated above) will be iterated through to create the plots. Each three scans will be faceted into one plot, one for RNA and one for protein. These two plots will be saved into a file with the specific gene name in the 'Plots' folder.
+```{r, eval=F}
+
+# Establish a set path to use for this code chunk 
+scans_path <- '/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/D0192Liver/Data/Output/'
+
+# Generate list of scan file names 
+scan_file_names <- list.files(paste(scans_path,'Scans', sep = ""))
+
+# Set the working directory to '/Scans'
+setwd(paste(scans_path,'Scans', sep = ""))
+
+# Establish a global counter variable (g) to be used later to iterate through gene names 
+g <- 1
+
+# Create two directories in the '/Plots' folder. One for RNA and one for proteins. 
+setwd(paste(scans_path, "Plots", sep= ""))
+dir.create(paste(scans_path, "Plots/", "Proteins",  sep= ""))
+dir.create(paste(scans_path, "Plots/", "RNA",  sep= ""))
+
+# Iterate through files in the list of file names 
+for (f in scan_file_names){
+  
+  # Use the list of Gene names to name the files
+  gene_names <-  gene.names
+  gene_file_name <-  paste(gene_names[[1]][g]) # Use the counter to locate the gene in the list
+  print(gene_file_name)
+  g <- g + 1 # Add to the counter so the next for loop uses the next gene 
+  
+  # Print to test
+  print(g)
+  
+  # Load the file to be able to access the scan data 
+  load(paste(scans_path, "Scans/", f, sep = ""))
+  
+  ##PLOT##
+  
+    #RNA#
+  
+  # Set the working directory to put the plots in
+  setwd(paste(scans_path, "Plots/", "RNA", sep =""))
+  
+  # Establish the graphical device that base R will send the plot to 
+  png(paste(gene_file_name), height = 780, width = 780 )
+  
+  # Set the number of rows to 3 and columns to 1
+  par(mfrow= c(3,1))
+  
+  # Create 3 plots with 3 threshold lines
+  plot(x = lod.rna.addcovariatesonly, map = map, main = paste(gene_file_name, "~Sex + Diet", "RNA"), ylim = c(0,30))
+  abline(h = 4, col = "red", lwd = 2)
+  abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
+  
+  plot(x = lod.rna.dietint, map = map, main = paste(gene_file_name, "Diet Int", "RNA"), ylim = c(0,30))
+  abline(h = 4, col = "red", lwd = 2)
+  abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
+  
+  plot(x = lod.rna.sexint, map = map, main = paste(gene_file_name, "Sex Int", "RNA"), ylim = c(0,30))
+  abline(h = 4, col = "red", lwd = 2)
+  abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
+  
+  dev.off()
+  
+    #PROTEIN#
+  
+  # Set the working directory to put the plots in
+  setwd(paste(scans_path, "Plots/", "Proteins", sep ="" ))
+  
+  # Establish the graphical device that base R will send the plot to 
+  png(paste(gene_file_name), height = 780, width = 780 )
+  
+  # Set the number of rows to 3 and columns to 1
+  par(mfrow= c(3,1))
+  
+  # Create 3 plots with 3 threshold lines
+  plot(x = lod.protein.addcovariatesonly, map = map, main = paste(gene_file_name, "~Sex + Diet + Tag", "Protein"), ylim = c(0,40))
+  abline(h = 4, col = "red", lwd = 2)
+  abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
+  
+  plot(x = lod.protein.dietint, map = map, main = paste(gene_file_name, "Diet Int", "Protein"), ylim = c(0,40))
+  abline(h = 4, col = "red", lwd = 2)
+  abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
+  
+  plot(x = lod.protein.sexint, map = map, main = paste(gene_file_name, "Sex Int", "Protein"), ylim = c(0,40))
+  abline(h = 4, col = "red", lwd = 2)
+  abline(h = 7, col = "yellow", lwd = 2)
+  abline(h = 10, col = "black", lwd = 2)
+  
+  dev.off()
+  
+  cat("Done with", gene_file_name, "\n")
+}
+
+```

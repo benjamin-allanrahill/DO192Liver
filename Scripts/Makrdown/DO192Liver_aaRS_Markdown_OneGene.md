@@ -1,30 +1,16 @@
----
-title: "DO192Liver_aaRS_Markdown"
-author: "Ben Allan-Rahill"
-date: "6/25/2018"
-output: 
-  github_document: 
-  html_notebook: null
-  toc: yes
-  toc_depth: 3
-  toc_float: TRUE
-  code_folding: hide
----
+DO192Liver\_aaRS\_Markdown
+================
+Ben Allan-Rahill
+6/25/2018
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(error = TRUE)
-path <- "/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/D0192Liver/"
-```
+Running QTL scans, with covariates, for one aaRS gene
+=====================================================
 
-# Running QTL scans, with covariates, for one aaRS gene
-
-
-### Install & load packages 
+### Install & load packages
 
 Here we will install the packages needed for running the QTL mapping and plotting
 
-```{r eval=F}
+``` r
 # Install packages
 # This is all from the Manhattan/AE plot script.
 install.packages("devtools")
@@ -36,39 +22,52 @@ install.github("kbroman/qtlcharts")
 install.packages(tidyverse)
 ```
 
-Load packages: 
-```{r}
+Load packages:
+
+``` r
 library(devtools)
 library(qtl2)
 library(dplyr)
+```
+
+    ## 
+    ## Attaching package: 'dplyr'
+
+    ## The following objects are masked from 'package:stats':
+    ## 
+    ##     filter, lag
+
+    ## The following objects are masked from 'package:base':
+    ## 
+    ##     intersect, setdiff, setequal, union
+
+``` r
 library(ggplot2)
 ```
 
-### Load the data files 
+### Load the data files
 
-```{r}
+``` r
 load("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/D0192Liver/Data/Input/DO192LiverData_Formattedfor_rQTL2.Rdata")
 ```
 
-
-# Scan 
+Scan
+====
 
 If running the script on the HPC, you will need to specify the number of cores needed for the job.
-```{r}
 
+``` r
 ## Establish global variables that do not need to be the for loop
   
 # Set the number of processor cores to be used. Use 1 on the HPC.
 cores.num = 1
-
 ```
 
-### Select gene name, index, and chromosome 
+### Select gene name, index, and chromosome
 
-For our purposes, we will select the first value (Aars) from the list of aaRS genes. We will then retrieve the index of the genes from the annotations dataframe. This will allow us to subset based off the index later on. 
+For our purposes, we will select the first value (Aars) from the list of aaRS genes. We will then retrieve the index of the genes from the annotations dataframe. This will allow us to subset based off the index later on.
 
-```{r}
-
+``` r
 gene_name <- "Aars"
 
 # Get the gene's index in the protein and rna data.
@@ -77,15 +76,13 @@ index.rna <- which(annotations.rna.192$Gene == gene_name)
 
 # Get the chromosome that the gene is on
 gene_chr <- annotations.protein.192[index.protein,]$Chromosome.Name  
-
 ```
 
-### Kinship matricies 
+### Kinship matricies
 
-Here we will establish the kinship matricies that will be used by the scan funtions later on. We will need to subset based off the mice that have data for protein and RNA we are looking at. 
+Here we will establish the kinship matricies that will be used by the scan funtions later on. We will need to subset based off the mice that have data for protein and RNA we are looking at.
 
-```{r}
-
+``` r
 # Only subset mice with protein expression data. I don't remember what issue this prevented.
 mice.with.data.r <- !is.na(expr.rna.192[,index.rna])
 mice.with.data.p <- !is.na(expr.protein.192[,index.protein])
@@ -100,15 +97,13 @@ for (chromosome in 1:20){
 for (chromosome in 1:20){
   K.LOCO.192.chr.p[[chromosome]] <- K.LOCO.qtl2[[chromosome]][mice.with.data.p,mice.with.data.p]
 }  
-
 ```
 
 ### Establish additive and interactive covaraints
 
-This is important for the scan function to run. It will factor in the effects of the covariants (sex, diet, and tag) on the QTL scans 
+This is important for the scan function to run. It will factor in the effects of the covariants (sex, diet, and tag) on the QTL scans
 
-```{r}
-
+``` r
 # Set up additive and interactive covariates for RNA/protein, only mice with data.
 addcovar.r <- model.matrix(~ Sex + Diet, data=covariates.rna.192[mice.with.data.r, ])
 intcovar.sex.r <- model.matrix(~ Sex, data=covariates.rna.192[mice.with.data.r, ])
@@ -117,14 +112,13 @@ intcovar.diet.r <- model.matrix(~ Diet, data=covariates.rna.192[mice.with.data.r
 addcovar.p <- model.matrix(~ Sex + Diet + Tag, data=covariates.protein.192[mice.with.data.p, ])
 intcovar.sex.p <- model.matrix(~ Sex, data=covariates.protein.192[mice.with.data.p, ])
 intcovar.diet.p <- model.matrix(~ Diet, data=covariates.protein.192[mice.with.data.p, ])
-
 ```
 
 ### Running the scan
 
-Here the qtl2 function 'scan1' will be used to creae LOD scores for the psuedomarkers. This will allow us to create plots with this data later on. The 'scan1' function also factors in the effects of kinship and covariants on the data. 
-```{r}
-    
+Here the qtl2 function 'scan1' will be used to creae LOD scores for the psuedomarkers. This will allow us to create plots with this data later on. The 'scan1' function also factors in the effects of kinship and covariants on the data.
+
+``` r
 # Perform QTL/LOD scans for RNA/protein in conditions of additive, interactive diet, and interactive sex covariates.
     
 # RNA
@@ -151,11 +145,9 @@ lod.rna.sexint <- scan1(genoprobs=probs[mice.with.data.r,],
                               addcovar=addcovar.r[,-1],
                               intcovar=intcovar.sex.r[,-1],
                               cores=cores.num, reml=TRUE)
-      
 ```
 
-```{r}
-      
+``` r
       # PROTEIN
       # Scan / Protein / Additive covariate: Sex & Diet
       lod.protein.addcovariatesonly <- scan1(genoprobs=probs[mice.with.data.p,], 
@@ -182,15 +174,14 @@ lod.rna.sexint <- scan1(genoprobs=probs[mice.with.data.r,],
                                   addcovar=addcovar.p[,-1], 
                                   intcovar=intcovar.sex.p[,-1], 
                                   cores=cores.num, reml=TRUE)
-      
 ```
 
-## Name and save the file 
+Name and save the file
+----------------------
 
-Here we will name the file with identifying information. The working directory will be set so that the scan files will be saved in the 'Output' data folder. 
+Here we will name the file with identifying information. The working directory will be set so that the scan files will be saved in the 'Output' data folder.
 
-```{r}
-
+``` r
 # Systematically name the file.
 file_name <- paste(annotations.protein.192[index.protein,]$Associated.Gene.Name, "_", annotations.protein.192[index.protein,]$Ensembl.Protein.ID, ".DO192Liver.DietSexInts.RData", sep="")
 
@@ -199,30 +190,27 @@ setwd("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/D0192Liver/Data/Output")
 
 # Save the scan data to the file.
 save(index.rna, index.protein, lod.rna.addcovariatesonly, lod.rna.dietint, lod.rna.sexint, lod.protein.addcovariatesonly, lod.protein.dietint, lod.protein.sexint, file = file_name)
-
 ```
 
-## Plot 
-
+Plot
+----
 
 ### Save plot files to a specific folder
 
-We will name the plot file with identifying information from the RData file. we will then create a new file for the plots of that gene. 
+We will name the plot file with identifying information from the RData file. we will then create a new file for the plots of that gene.
 
-```{r, eval=F}
-
+``` r
 plot_file_name <- paste(gene_name, "_", annotations.protein.192[index.protein,]$Ensembl.Protein.ID, ".DO192Liver.DietSexInts", "_plot", sep="")
 
 setwd(paste(path, "Data/Output/Plots", sep= ""))
 
 # Make a new folder for the gene and its plots
 dir.create(paste(path, "Data/Output/Plots/", gene_name, sep ="" ))
-
-
 ```
 
 ### RNA
-```{r, fig.height=20, fig.width=12}
+
+``` r
 # Set the working directory to put the plots in
 setwd(paste(path, "Data/Output/Plots/", gene_name, sep ="" ))
 
@@ -245,11 +233,14 @@ abline(h = 7, col = "yellow", lwd = 2)
 abline(h = 10, col = "black", lwd = 2)
 
 dev.off()
-
 ```
 
+    ## quartz_off_screen 
+    ##                 2
+
 ### Protein
-```{r, fig.height=14, fig.width=12}
+
+``` r
 # Set the working directory to put the plots in
 setwd(paste(path, "Data/Output/Plots/", gene_name, sep ="" ))
 
@@ -272,14 +263,7 @@ abline(h = 7, col = "yellow", lwd = 2)
 abline(h = 10, col = "black", lwd = 2)
 
 dev.off()
-
 ```
 
-
-
-
-
-
-
-
-
+    ## quartz_off_screen 
+    ##                 2
