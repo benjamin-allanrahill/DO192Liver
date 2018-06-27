@@ -201,6 +201,7 @@ save(index.rna, index.protein, lod.rna.addcovariatesonly, lod.rna.dietint, lod.r
 
 
 ### Save plot files to a specific folder
+This script currently creates a seperate folder for each gene. This can be easily rewritten to put the plots into 'RNA' and 'Protein' folders. 
 
 ```{r}
 
@@ -215,11 +216,19 @@ dir.create(paste(path, "Data/Output/Plots/", gene_name, sep ="" ))
 ```
 
 ### RNA
+This chunk set the working directory to the folder of the gene. It then greates a PNG with 3 facets, one for each scan. The y-axis are a set scale (0, 30) and each plot has three threshold lines. 
+
+* Red = 4
+* Yellow = 7
+* Black = 10 
+
 ```{r, fig.height=20, fig.width=12}
 # Set the working directory to put the plots in
 setwd(paste(path, "Data/Output/Plots/", gene_name, sep ="" ))
 
+# Set the device to PNG so that R writes .png files when it creates the plots 
 png(paste(gene_name, "_RNA", sep =""), height = 780, width = 780 )
+
 # Set the number of rows to 3 and columns to 1
 par(mfrow= c(3,1))
 
@@ -244,11 +253,17 @@ dev.off()
 ```
 
 ### Protein
+
+This chunk set the working directory to the folder of the gene. It then greates a PNG with 3 facets, one for each scan. The y-axis are a set scale (0, 40) and each plot has three threshold lines. 
+
+
 ```{r, fig.height=14, fig.width=12}
 # Set the working directory to put the plots in
 setwd(paste(path, "Data/Output/Plots/", gene_name, sep ="" ))
 
-png(paste(path, "Data/Output/Plots/", gene_name, "_RNA", sep ="" ))
+# Set the device to PNG so that R writes .png files when it creates the plots 
+png(paste(path, "Data/Output/Plots/", gene_name, "_Protein", sep ="" ))
+
 # Set the number of rows to 3 and columns to 1
 par(mfrow= c(3,1))
 
