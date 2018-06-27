@@ -252,7 +252,7 @@ png(paste(path, "Data/Output/Plots/", gene_name, "_RNA", sep ="" ))
 # Set the number of rows to 3 and columns to 1
 par(mfrow= c(3,1))
 
-# Create 3 plots with 3 threshold lines
+# Create 3 plots with 3 threshold lines with set y-axis scale 
 
 plot(x = lod.protein.addcovariatesonly, map = map, main = paste(gene_name, "~Sex + Diet Protein"), ylim = c(0,40))
 abline(h = 4, col = "red", lwd = 2)
