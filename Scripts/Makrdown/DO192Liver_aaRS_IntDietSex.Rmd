@@ -68,7 +68,8 @@ cores.num = 1
 
 ### Main For Loop:
 
-```{r, eval=F}
+
+```{r}
 # Iterate through data structure of specific gene names and run the scan process for each. 
 for (gene_name in gene.names$V1){
 
