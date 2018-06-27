@@ -225,14 +225,16 @@ par(mfrow= c(3,1))
 
 # Create 3 plots with 3 threshold lines
 
-plot(x = lod.rna.addcovariatesonly, map = map, main = paste(gene_name, "additive covariates", "RNA"))
+plot(x = lod.rna.addcovariatesonly, map = map, main = paste(gene_name, "~Sex + Diet RNA"), ylim = c(0,30))
 abline(h = 4, col = "red", lwd = 2)
+abline(h = 7, col = "yellow", lwd = 2)
+abline(h = 10, col = "black", lwd = 2)
 
-plot(x = lod.rna.dietint, map = map, main = paste(gene_name, "Diet", "RNA"))
+plot(x = lod.rna.dietint, map = map, main = paste(gene_name, "Diet Int RNA"), ylim = c(0,30))
 abline(h = 4, col = "red", lwd = 2)
 abline(h = 7, col = "yellow", lwd = 2)
 
-plot(x = lod.rna.sexint, map = map, main = paste(gene_name, "Sex", "RNA"))
+plot(x = lod.rna.sexint, map = map, main = paste(gene_name, "Sex Int RNA"), ylim = c(0,30))
 abline(h = 4, col = "red", lwd = 2)
 abline(h = 7, col = "yellow", lwd = 2)
 abline(h = 10, col = "black", lwd = 2)
@@ -252,14 +254,17 @@ par(mfrow= c(3,1))
 
 # Create 3 plots with 3 threshold lines
 
-plot(x = lod.protein.addcovariatesonly, map = map, main = paste(gene_name, " ", "additive covariates", "Protein"))
-abline(h = 4, col = "red", lwd = 2)
-
-plot(x = lod.protein.dietint, map = map, main = paste(gene_name, " ", "Diet", "Protein"))
+plot(x = lod.protein.addcovariatesonly, map = map, main = paste(gene_name, "~Sex + Diet Protein"), ylim = c(0,40))
 abline(h = 4, col = "red", lwd = 2)
 abline(h = 7, col = "yellow", lwd = 2)
+abline(h = 10, col = "black", lwd = 2)
 
-plot(x = lod.protein.sexint, map = map, main = paste(gene_name, " ", "Sex", "Protein"))
+plot(x = lod.protein.dietint, map = map, main = paste(gene_name, "Diet Protein"), ylim = c(0,40))
+abline(h = 4, col = "red", lwd = 2)
+abline(h = 7, col = "yellow", lwd = 2)
+abline(h = 10, col = "black", lwd = 2)
+
+plot(x = lod.protein.sexint, map = map, main = paste(gene_name, "Sex Protein"), ylim = c(0,40))
 abline(h = 4, col = "red", lwd = 2)
 abline(h = 7, col = "yellow", lwd = 2)
 abline(h = 10, col = "black", lwd = 2)
