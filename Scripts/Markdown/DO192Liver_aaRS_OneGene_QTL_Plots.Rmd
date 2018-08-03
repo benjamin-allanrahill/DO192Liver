@@ -1,0 +1,785 @@
+---
+title: "DO192Liver_aaRS_Markdown"
+author: "Ben Allan-Rahill"
+date: "6/25/2018"
+output: 
+  github_document: 
+  html_document:
+  html_notebook: null
+  toc: yes
+  toc_depth: 3
+  toc_float: TRUE
+  code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = TRUE)
+path <- "/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/DO192Liver/"
+
+options(stringsAsFactors = FALSE)
+```
+
+# Running QTL scans, with covariates, for one aaRS gene
+
+
+### Install & load packages 
+
+Here we will install the packages needed for running the QTL mapping and plotting
+
+```{r, eval=F}
+# Install packages
+# This is all from the Manhattan/AE plot script.
+install.packages("devtools")
+install.github("dmgatti/DOQTL")
+source("https://bioconductor.org/biocLite.R")
+biocLite("BSgenome.Mmusculus.UCSC.mm10")
+install.github("simecek/intermediate")
+install.github("kbroman/qtlcharts")
+install.packages(tidyverse)
+install.packages("gridExtra")
+```
+
+Load packages: 
+```{r}
+library(devtools)
+library(qtl2)
+library(dplyr)
+library(ggplot2)
+require(purrr)
+require(readr)
+require(tidyr)
+require(knitr)
+require(kableExtra)
+require(gridExtra)
+```
+### Establish Users
+This is so the program can be run from multiple computers 
+
+```{r}
+user <- "c-allanb"
+user2 <- "ballanrahill"
+```
+
+### Load the data file 
+
+```{r}
+load("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/DO192Liver/Data/Input/DO192LiverData_Formattedfor_rQTL2.Rdata")
+```
+
+# Scan 
+
+If running the script on the HPC, you will need to specify the number of cores needed for the job.
+```{r, eval=F}
+
+## Establish global variables that do not need to be the for loop
+  
+# Set the number of processor cores to be used. Use 1 on the HPC.
+cores.num = 1
+
+```
+
+### Select gene name, index, and chromosome 
+
+For our purposes, we will select the first value (Aars) from the list of aaRS genes. We will then retrieve the index of the genes from the annotations dataframe. This will allow us to subset based off the index later on. 
+
+```{r}
+
+gene_name <- "Aars"
+
+# Get the gene's index in the protein and rna data.
+index.protein <- which(annotations.protein.192$Associated.Gene.Name == gene_name)
+index.rna <- which(annotations.rna.192$Gene == gene_name)
+
+# Get the chromosome that the gene is on
+gene_chr <- annotations.protein.192[index.protein,]$Chromosome.Name  
+
+```
+
+### Kinship matricies 
+
+Here we will establish the kinship matricies that will be used by the scan funtions later on. We will need to subset based off the mice that have data for protein and RNA we are looking at. 
+
+```{r}
+
+# Only subset mice with protein expression data. I don't remember what issue this prevented.
+mice.with.data.r <- !is.na(expr.rna.192[,index.rna])
+mice.with.data.p <- !is.na(expr.protein.192[,index.protein])
+    
+# Set up kinship matrices for the mice that have data for your given RNA/protein. Does it need to be for all chromosomes?
+K.LOCO.192.chr.r <- K.LOCO.qtl2
+K.LOCO.192.chr.p <- K.LOCO.qtl2
+
+for (chromosome in 1:20){
+  K.LOCO.192.chr.r[[chromosome]]<- K.LOCO.qtl2[[chromosome]][mice.with.data.r,mice.with.data.r]
+}
+for (chromosome in 1:20){
+  K.LOCO.192.chr.p[[chromosome]] <- K.LOCO.qtl2[[chromosome]][mice.with.data.p,mice.with.data.p]
+}  
+
+```
+
+### Establish additive and interactive covaraints
+
+This is important for the scan function to run. It will factor in the effects of the covariants (sex, diet, and tag) on the QTL scans 
+
+```{r}
+
+# Set up additive and interactive covariates for RNA/protein, only mice with data.
+addcovar.r <- model.matrix(~ Sex + Diet, data=covariates.rna.192[mice.with.data.r, ])
+intcovar.sex.r <- model.matrix(~ Sex, data=covariates.rna.192[mice.with.data.r, ])
+intcovar.diet.r <- model.matrix(~ Diet, data=covariates.rna.192[mice.with.data.r, ])
+
+addcovar.p <- model.matrix(~ Sex + Diet + Tag, data=covariates.protein.192[mice.with.data.p, ])
+intcovar.sex.p <- model.matrix(~ Sex, data=covariates.protein.192[mice.with.data.p, ])
+intcovar.diet.p <- model.matrix(~ Diet, data=covariates.protein.192[mice.with.data.p, ])
+
+```
+
+### Running the scan
+
+Here the qtl2 function 'scan1' will be used to creae LOD scores for the psuedomarkers. This will allow us to create plots with this data later on. The 'scan1' function also factors in the effects of kinship and covariants on the data. 
+```{r, eval=F}
+    
+# Perform QTL/LOD scans for RNA/protein in conditions of additive, interactive diet, and interactive sex covariates.
+    
+# RNA
+# Scan / RNA / Additive covariate: Sex & Diet
+lod.rna.addcovariatesonly <- scan1(genoprobs=probs[mice.with.data.r,],
+                                         kinship=K.LOCO.192.chr.r,
+                                         pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                         addcovar=addcovar.r[,-1],
+                                         cores=cores.num, reml=TRUE)
+    
+      
+# Scan / RNA / Interactive covariate: Diet
+lod.rna.dietint <- scan1(genoprobs=probs[mice.with.data.r,],
+                                kinship=K.LOCO.192.chr.r,
+                                pheno=expr.rna.192[mice.with.data.r,index.rna],
+                                addcovar=addcovar.r[,-1],
+                                intcovar=intcovar.diet.r[,-1],
+                                cores=cores.num, reml=TRUE)
+    
+# Scan / RNA / Interactive covariate: Sex
+lod.rna.sexint <- scan1(genoprobs=probs[mice.with.data.r,],
+                              kinship=K.LOCO.192.chr.r,
+                              pheno=expr.rna.192[mice.with.data.r,index.rna],
+                              addcovar=addcovar.r[,-1],
+                              intcovar=intcovar.sex.r[,-1],
+                              cores=cores.num, reml=TRUE)
+      
+```
+
+```{r, eval=F}
+      
+      # PROTEIN
+      # Scan / Protein / Additive covariate: Sex & Diet
+      lod.protein.addcovariatesonly <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                              kinship=K.LOCO.192.chr.p,
+                                              pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                              addcovar=addcovar.p[,-1],
+                                              cores=cores.num, reml=TRUE)
+      
+    
+      
+      # Scan / Protein / Interactive covariate: Diet
+      lod.protein.dietint <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                    kinship=K.LOCO.192.chr.p,
+                                    pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                    addcovar=addcovar.p[,-1],
+                                    intcovar=intcovar.diet.p[,-1],
+                                    cores=cores.num, reml=TRUE)
+      
+      
+      # Scan / Protein / Interactive covariate: Sex
+      lod.protein.sexint <- scan1(genoprobs=probs[mice.with.data.p,], 
+                                  kinship=K.LOCO.192.chr.p, 
+                                  pheno=expr.protein.192[mice.with.data.p,index.protein], 
+                                  addcovar=addcovar.p[,-1], 
+                                  intcovar=intcovar.sex.p[,-1], 
+                                  cores=cores.num, reml=TRUE)
+      
+```
+
+## Name and save the file 
+
+Here we will name the file with identifying information. The working directory will be set so that the scan files will be saved in the 'Output' data folder. 
+
+```{r, eval=F}
+
+# Systematically name the file.
+file_name <- paste(annotations.protein.192[index.protein,]$Associated.Gene.Name, "_", annotations.protein.192[index.protein,]$Ensembl.Protein.ID, ".DO192Liver.DietSexInts.RData", sep="")
+
+# Set the working directory (FOR THIS NOTEBOOK ONLY)
+setwd("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/D0192Liver/Data/Output")
+
+# Save the scan data to the file.
+save(index.rna, index.protein, lod.rna.addcovariatesonly, lod.rna.dietint, lod.rna.sexint, lod.protein.addcovariatesonly, lod.protein.dietint, lod.protein.sexint, file = file_name)
+
+```
+
+# Plot 
+
+
+### Save plot files to a specific folder
+This script currently creates a seperate folder for each gene. This can be easily rewritten to put the plots into 'RNA' and 'Protein' folders. 
+
+We will name the plot file with identifying information from the RData file. we will then create a new file for the plots of that gene. 
+
+```{r}
+setwd(paste(path, "Data/Output/Plots", sep= ""))
+
+# Make a new folder for the gene and its plots
+dir.create(paste(path, "Data/Output/Plots/", gene_name, sep ="" ))
+
+
+```
+
+### RNA
+This chunk set the working directory to the folder of the gene. It then greates a PNG with 3 facets, one for each scan. The y-axis are a set scale (0, 30) and each plot has three threshold lines. 
+
+* Red = 4
+* Yellow = 7
+* Black = 10 
+
+```{r, fig.height=20, fig.width=12}
+# Set the working directory to put the plots in
+setwd(paste(path, "Data/Output/Plots/RNA", gene_name, sep ="" ))
+
+# Set the device to PNG so that R writes .png files when it creates the plots 
+png(paste(gene_name, "_RNA", sep =""), height = 780, width = 780 )
+
+# Set the number of rows to 3 and columns to 1
+par(mfrow= c(3,1))
+
+# Create 3 plots with 3 threshold lines
+
+plot(x = lod.rna.addcovariatesonly, map = map, main = paste(gene_name, "~Sex + Diet RNA"), ylim = c(0,30))
+abline(h = 4, col = "red", lwd = 2)
+abline(h = 7, col = "yellow", lwd = 2)
+abline(h = 10, col = "black", lwd = 2)
+
+plot(x = lod.rna.dietint, map = map, main = paste(gene_name, "Diet Int RNA"), ylim = c(0,30))
+abline(h = 4, col = "red", lwd = 2)
+abline(h = 7, col = "yellow", lwd = 2)
+
+plot(x = lod.rna.sexint, map = map, main = paste(gene_name, "Sex Int RNA"), ylim = c(0,30))
+abline(h = 4, col = "red", lwd = 2)
+abline(h = 7, col = "yellow", lwd = 2)
+abline(h = 10, col = "black", lwd = 2)
+
+dev.off()
+
+```
+
+### Protein
+
+This chunk set the working directory to the folder of the gene. It then greates a PNG with 3 facets, one for each scan. The y-axis are a set scale (0, 40) and each plot has three threshold lines. 
+
+
+```{r, fig.height=14, fig.width=12}
+# Set the working directory to put the plots in
+setwd(paste(path, "Data/Output/Plots/Proteins", gene_name, sep ="" ))
+
+# Set the device to PNG so that R writes .png files when it creates the plots 
+png(paste(path, "Data/Output/Plots/Proteins", gene_name, "_Protein", sep ="" ))
+
+# Set the number of rows to 3 and columns to 1
+par(mfrow= c(3,1))
+
+# Create 3 plots with 3 threshold lines with set y-axis scale 
+
+plot(x = lod.protein.addcovariatesonly, map = map, main = paste(gene_name, "~Sex + Diet Protein"), ylim = c(0,40))
+abline(h = 4, col = "red", lwd = 2)
+abline(h = 7, col = "yellow", lwd = 2)
+abline(h = 10, col = "black", lwd = 2)
+
+plot(x = lod.protein.dietint, map = map, main = paste(gene_name, "Diet Protein"), ylim = c(0,40))
+abline(h = 4, col = "red", lwd = 2)
+abline(h = 7, col = "yellow", lwd = 2)
+abline(h = 10, col = "black", lwd = 2)
+
+plot(x = lod.protein.sexint, map = map, main = paste(gene_name, "Sex Protein"), ylim = c(0,40))
+abline(h = 4, col = "red", lwd = 2)
+abline(h = 7, col = "yellow", lwd = 2)
+abline(h = 10, col = "black", lwd = 2)
+
+dev.off()
+
+```
+
+# Find Peaks 
+
+In this part of the script, we will use the qtl2 function `find_peaks` to find the positions in each scan (additive, diet interactive, and sex interactive) where the LOD score is above 7 (the set threshold). We will the collate this data with gene specific data to create .tsv files for each gene. 
+
+Lets find the peaks for the protein scans and collate them into one data frame:
+```{r}
+
+# Genereate data from scans using the find peaks function 
+
+# Load scan
+
+scans_path <- "/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/DO192Liver/Data/Output/Scans/Aars_ENSMUSP00000034441.DO192Liver.DietSexInts.Rdata"
+load(scans_path)
+
+### PROTEIN ###
+
+# Run these find peaks function for each LOD scan 
+peaks_additive.p <- find_peaks(lod.protein.addcovariatesonly, map = map, threshold = 7, drop = 1.5, peakdrop = 1.8)
+peaks_diet_int.p <- find_peaks(lod.protein.dietint, map = map, threshold = 7, drop = 1.5, peakdrop = 1.8)
+peaks_sex_int.p <- find_peaks(lod.protein.sexint, map = map, threshold = 7, drop = 1.5, peakdrop = 1.8)
+
+# Manipulate data to retrieve the columns you want
+# Add column to each df to which LOD scan it came from 
+peaks_additive.p <- peaks_additive.p %>%
+  mutate(Covariates = rep("Additive")) %>%
+  select(Covariates, chr, pos, ci_lo, ci_hi)
+peaks_diet_int.p <- peaks_diet_int.p %>%
+  mutate(Covariates = rep("Diet Int")) %>%
+  select(Covariates, chr, pos, ci_lo, ci_hi)
+peaks_sex_int.p <- peaks_sex_int.p %>%
+  mutate(Covariates = rep("Sex Int")) %>%
+  select(Covariates, chr, pos, ci_lo, ci_hi)
+
+# Combine covariate dfs into a single df
+peaks_data.prot <- bind_rows(peaks_additive.p, peaks_diet_int.p, peaks_sex_int.p)
+
+kable(head(peaks_data.prot), format = "html") %>%
+  kable_styling()
+
+
+```
+
+Here we will replicate that above steps, this time for RNA data. 
+```{r}
+
+### RNA ###
+
+# Run these find peaks function for each LOD scan 
+peaks_additive.rna <- find_peaks(lod.rna.addcovariatesonly, map = map, threshold = 7, drop = 1.5, peakdrop = 1.8)
+peaks_diet_int.rna <- find_peaks(lod.rna.dietint, map = map, threshold = 7, drop = 1.5, peakdrop = 1.8)
+peaks_sex_int.rna <- find_peaks(lod.rna.sexint, map = map, threshold = 7, drop = 1.5, peakdrop = 1.8)
+
+# Add column to each df to which LOD scan it came from 
+peaks_additive.rna <- peaks_additive.rna %>%
+  mutate(Covariates = rep("Additive")) %>%
+  select(Covariates, chr, pos, ci_lo, ci_hi)
+
+peaks_diet_int.rna <- peaks_diet_int.rna %>%
+  mutate(Covariates = rep("Diet Int")) %>%
+  select(Covariates, chr, pos, ci_lo, ci_hi)
+
+peaks_sex_int.rna <- peaks_sex_int.rna %>%
+  mutate(Covariates = rep("Sex Int")) %>%
+  select(Covariates, chr, pos, ci_lo, ci_hi)
+
+# Combine covariate dfs into a single df
+peaks_data.rna <- bind_rows(peaks_additive.rna, peaks_diet_int.rna, peaks_sex_int.rna)
+
+
+kable(head(peaks_data.rna), format = "html") %>%
+  kable_styling()
+
+```
+
+### Gene Specific Data
+We will use the annotations data frames to retrieve the gene specific data for the protein and RNA. This is the data that will be appended to the peak data later on. Measurement will be in Mbp.
+```{r}
+
+## PROTEIN DATA ##
+
+# Create empty df to put values into
+gene_specific_data.p <- filter(annotations.protein.192, annotations.protein.192$Associated.Gene.Name == gene_name) %>%
+  select(
+    Ensembl_Gene_ID = Ensembl.Gene.ID, 
+    Ensembl_Protein_ID = Ensembl.Protein.ID, 
+    Gene_Name = Associated.Gene.Name, 
+    Chromosome = Chromosome.Name, 
+    Gene_Start = Gene.Start..bp., 
+    Gene_End = Gene.End..bp.) 
+
+# Add rows so that the combine colls will work 
+gene_specific_data.p <- add_row(gene_specific_data.p, 
+                                Ensembl_Gene_ID = rep(gene_specific_data.p[1,1], times = nrow(peaks_data.prot) -1), 
+                                Ensembl_Protein_ID = gene_specific_data.p[1,2], 
+                                Gene_Name = gene_specific_data.p[1,3], 
+                                Chromosome = gene_specific_data.p[1,4], 
+                                Gene_Start = gene_specific_data.p[1,5]/1e6, 
+                                Gene_End = gene_specific_data.p[1,6]/1e6)
+  
+kable(gene_specific_data.p) %>%
+  kable_styling()
+```
+
+```{r}
+
+## RNA DATA## 
+
+# Create empty df to put values into
+gene_specific_data.rna <-  filter(annotations.rna.192, annotations.rna.192$Gene == gene_name) %>%
+  select(
+    Ensembl_Gene_ID = EnsemblID, 
+    Gene_Name = Gene, 
+    Chromosome = Chr, 
+    Gene_Start = Start.Mbp, 
+    Gene_End = End.Mbp)
+
+# Add rows so that the combine colls will work 
+gene_specific_data.rna <- add_row(gene_specific_data.rna, 
+                                  Ensembl_Gene_ID = rep(gene_specific_data.rna[1,1], times = nrow(peaks_data.rna) -1), 
+                                  Gene_Name = gene_specific_data.rna[1,2], 
+                                  Chromosome = gene_specific_data.rna[1,3], 
+                                  Gene_Start = gene_specific_data.rna[1,4], 
+                                  Gene_End = gene_specific_data.rna[1,5])
+kable(gene_specific_data.rna) %>%
+  kable_styling()
+  
+```
+### Compilation
+
+Here is where we take the gene specific data and the peak data and use `bind_cols` to combine into one df. 
+```{r}
+
+# Combine dataframes into one complete dataframe 
+complete_peak_data.p <- bind_cols(gene_specific_data.p, peaks_data.prot) 
+kable(complete_peak_data.p, caption = "complete_peak_data.p") %>%
+  kable_styling()
+complete_peak_data.rna <- bind_cols(gene_specific_data.rna, peaks_data.rna)
+kable(complete_peak_data.rna, caption = "complete_peak_data.rna") %>%
+  kable_styling()
+
+```
+
+# Local/Distant Classification
+
+In this part of the script we will classify the QTLs into local and distant. This will be done based off the distance the QTL is from gene. 
+
+
+
+```{r}
+peaks_data_path <- "/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/DO192Liver/Data/Output/peak_data"
+```
+
+### Protein Data
+```{r}
+# Set working directory to the 'proteins' folder
+setwd(paste(peaks_data_path, "/Proteins", sep=""))
+
+# Read in the .tsv file
+peaks_data.prot <- read.table(paste(peaks_data_path, "/Proteins/", gene_name, "_peaks_comb_Prot.tsv", sep=""), header = TRUE, sep = "\t")
+
+# Calculate center of gene 
+gene_center <- mean(c(complete_peak_data.p$Gene_End, peaks_data.prot$Gene_Start))
+qtl_distance <- abs(complete_peak_data.p$pos - gene_center)
+
+# Determine the QTL Type based off distance and chromisome
+qtl_type <- ifelse(complete_peak_data.p$chr != complete_peak_data.p$Chromosome | qtl_distance >= 2.5, "Distant", "Local")
+
+# Add to df with QTL type and distance 
+peaks_data.prot <- mutate(complete_peak_data.p, QTL_Distance = qtl_distance, QTL_Type = qtl_type)
+
+kable(peaks_data.prot) %>%
+  kable_styling()
+
+# Rewrite the file
+write.table(peaks_data.prot, file = paste(gene_name, "_peaks_comb_Prot.tsv", sep =""), sep = "\t", row.names = FALSE)
+  
+```
+
+### RNA Data
+
+```{r}
+
+# Set working directory to the 'proteins' folder
+setwd(paste(peaks_data_path, "/RNA", sep=""))
+
+# Read in the .tsv file
+peaks_data.rna <- read.table(paste(peaks_data_path, "/RNA/", gene_name, "_peaks_comb_RNA.tsv", sep=""), header = TRUE, sep = "\t")
+
+# Calculate center of gene 
+gene_center <- mean(c(complete_peak_data.rna$Gene_End, peaks_data.rna$Gene_Start))
+qtl_distance <- abs(complete_peak_data.rna$pos - gene_center)
+  
+# Determine the QTL Type based off distance and chromisome
+qtl_type <- ifelse(complete_peak_data.rna$chr != complete_peak_data.rna$Chromosome | qtl_distance >= 2.5, "Distant", "Local")
+
+# Add to df with QTL type and distance 
+peaks_data.rna <- mutate(complete_peak_data.rna, QTL_Distance = qtl_distance, QTL_Type = qtl_type)
+
+kable(peaks_data.rna) %>%
+  kable_styling()
+
+write.table(peaks_data.rna, file = paste(gene_name, "_peaks_comb_RNA.tsv", sep =""), sep = "\t", row.names = FALSE)
+
+```
+
+# Summary Table
+Here we will creat summary tables based off the data generated above.
+
+### Set the directory paths
+```{r}
+directory.prot <- paste("/Users/", user, "/Desktop/Benjamin_Allan-Rahill/DO192Liver/Data/Output/peak_data/Proteins", sep = "") 
+directory.rna <- paste("/Users/", user, "/Desktop/Benjamin_Allan-Rahill/DO192Liver/Data/Output/peak_data/RNA", sep = "")
+prot_tsv_list <- dir(path = directory.prot, pattern = "*.tsv")
+rna_tsv_list <- dir(path = directory.rna, pattern = "*.tsv")
+```
+
+```{r}
+summary_tbl.prot <- tibble(Type = "pQTL")
+
+# sumarise specific columns of the pQTLs
+prot_covar_count <- peaks_data.prot %>%
+  group_by(Covariates) %>%
+  summarise(count = n())
+
+prot_type_count <- peaks_data.prot %>%
+  group_by(QTL_Type) %>%
+  summarise(count = n())
+
+addt_count.prot <- prot_covar_count$count[1]
+diet_int_count.prot <- prot_covar_count$count[2]
+sex_int_count.prot <- prot_covar_count$count[3]
+
+# assign counts to variables
+distant_count.prot <- prot_type_count$count[1]
+local_count.prot <- prot_type_count$count[2]
+
+summary_tbl.prot <- summary_tbl.prot %>%
+  mutate(Total = nrow(peaks_data.prot), Additive = addt_count.prot, Diet_Int = diet_int_count.prot, Sex_Int = sex_int_count.prot, Distant = distant_count.prot, Local = local_count.prot)
+
+kable(summary_tbl.prot) %>%
+  kable_styling()
+```
+
+```{r}
+
+summary_tbl.rna <- tibble(Type ="eQTL")
+
+# sumarise specific columns of the pQTLs
+rna_covar_count <- peaks_data.rna %>%
+  group_by(Covariates) %>%
+  summarise(count = n())
+
+rna_type_count <- peaks_data.rna %>%
+  group_by(QTL_Type) %>%
+  summarise(count = n())
+
+addt_count.rna <- rna_covar_count$count[1]
+diet_int_count.rna <- rna_covar_count$count[2]
+sex_int_count.rna <- rna_covar_count$count[3]
+
+# assign counts to variables
+distant_count.rna <- rna_type_count$count[1]
+local_count.rna <- rna_type_count$count[2]
+
+summary_tbl.rna <- summary_tbl.rna %>%
+  mutate(Total = nrow(peaks_data.rna), Additive = addt_count.rna, Diet_Int = diet_int_count.rna, Sex_Int = sex_int_count.rna, Distant = distant_count.rna, Local = local_count.rna)
+
+kable(summary_tbl.rna) %>%
+  kable_styling()
+
+```
+
+Merge tables 
+```{r}
+
+# merge sumary tables together 
+summary_table <- bind_rows(summary_tbl.prot, summary_tbl.rna)
+
+kable(summary_table) %>%
+  kable_styling()
+
+```
+
+## Founder Effects 
+
+Here we will use the `scan1coef` function to find the coefficients from the founders at each place on the chromosome. We will also plot within the function. 
+```{r}
+
+## PROTEIN
+
+dir.create(paste(path, "Data/Output/Plots/Founder_effects/Protein/", gene_name, sep = ""))
+setwd(paste(path, "Data/Output/Plots/Founder_effects/Protein/", gene_name, sep = ""))
+
+for (row in length(peak_data.prot)) {
+  print(peak_data.prot[row,])
+
+  if (peak_data.prot[row,"Covariates"] == "Additive") {
+    # scan
+    coef_scan_add.prot <-  scan1coef(genoprobs = probs[mice.with.data.p, peak_data.prot$chr],
+                                kinship=K.LOCO.192.chr.p,
+                                pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                addcovar=addcovar.p[,-1],
+                                reml=TRUE )
+
+    # Plot
+    png(filename= paste(path, "Data/Output/Plots/Founder_effects/Protein/", gene_name, "_chr", peak_data.prot$chr, "_pQTL_Additive", sep =""), height = 1018, width = 1280 )
+    coef_plot_add.p <- plot_coefCC(coef_scan_add.prot, map, scan1_output = lod.protein.addcovariatesonly)
+    dev.off()
+    cat("Done with", gene_name, peak_data.prot$chr, sep =" ")
+    next()
+  }
+  if (peak_data.prot[row, "Covariates"] == "Diet Int") {
+    # Scan
+    coef_scan_diet_int.prot <- scan1coef(genoprobs=probs[mice.with.data.p, peak_data.prot$chr],
+                                    kinship=K.LOCO.192.chr.p,
+                                    pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                    addcovar=addcovar.p[,-1],
+                                    intcovar=intcovar.diet.p[,-1],
+                                    reml=TRUE)
+
+    # Plot
+    png(filename= paste(path, "Data/Output/Plots/Founder_effects/Protein/", gene_name, "_chr", peak_data.prot$chr, "_pQTL_Diet_Int", sep =""), height = 1018, width = 1280 )
+    coef_plot_diet_int.p <- plot_coefCC(coef_scan_diet_int.prot, map, scan1_output = lod.protein.dietint)
+    dev.off()
+    next()
+
+  }
+  if (peaks_data.prot[row, "Coavariates"] == "Sex Int"){
+    # Scan / Protein / Interactive covariate: Sex
+    coef_scan_sex_int.prot <- scan1coef(genoprobs=probs[mice.with.data.p, peaks_data.prot$chr],
+                            kinship=K.LOCO.192.chr.p,
+                            pheno=expr.protein.192[mice.with.data.p,index.protein],
+                            addcovar=addcovar.p[,-1],
+                            intcovar=intcovar.sex.p[,-1],
+                            reml=TRUE)
+
+    #Plot
+    png(filename= paste(path, "Data/Output/Plots/Founder_effects/Protein/", gene_name, "_chr", peaks_data.prot$chr, "_pQTL_Sex_Int", sep =""), height = 1018, width = 1280 )
+    coef_plot_sex_int.p <- plot_coefCC(coef_scan_sex_int.prot, map, scan1_output = lod.protein.sexint)
+    dev.off()
+    next()
+  }
+
+}
+
+```
+
+```{r, eval=F}
+# Protein
+
+# Collate to get rid of dupes 
+distinct_peaks_data.prot <-  distinct(peaks_data.prot, chr, Covariates)
+
+# for each row run the coef scan and plot funtion below 
+for (i in 1:nrow(distinct_peaks_data.prot)) {
+  print(i)  
+  print(distinct_peaks_data.prot$chr[[i]])
+  coef_scan_plot(as.numeric(distinct_peaks_data.prot$chr[[i]]), distinct_peaks_data.prot$Covariates[[i]], "Protein")
+}
+
+
+# RNA
+
+# Collate to get rid of dupes 
+distinct_peaks_data.rna <-  distinct(peaks_data.rna, chr, Covariates)
+
+for (i in 1:nrow(distinct_peaks_data.rna)) {
+  print(i)  
+  print(distinct_peaks_data.rna$chr[[i]])
+  coef_scan_plot(distinct_peaks_data.rna$chr[[i]], distinct_peaks_data.rna$Covariates[[i]], "RNA")
+}
+
+
+```
+
+```{r}
+
+coef_scan_plot <-  function(chromosome, covariates, type) {
+  
+  if (covariates == "Additive" && chr != "20") {
+    coef_scan_add.prot <-  scan1coef(genoprobs = probs[mice.with.data.p,][[chromosome]],
+                                kinship=K.LOCO.192.chr.p[[chromosome]],
+                                pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                addcovar=addcovar.p[,-1],
+                                reml=TRUE )
+    
+    # Plot
+    png(filename= paste(path, "Data/Output/Plots/Founder_effects/", type, "/", gene_name, "_chr", chromosome, "_", covariates, sep =""), height = 1018, width = 1280 )
+    coef_plot_diet_int.p <- plot_coefCC(coef_scan_add.prot, map, scan1_output = lod.protein.addcovariatesonly)
+    dev.off()
+    cat("Done with ", gene_name, "_chr", chromosome, "_", covariates)
+  }
+  
+  if (covariates == "Diet Int" && chr != "20") {
+    # Scan
+    coef_scan_diet_int.prot <- scan1coef(genoprobs=probs[mice.with.data.p, ][[chromosome]],
+                                    kinship=K.LOCO.192.chr.p[[chromosome]],
+                                    pheno=expr.protein.192[mice.with.data.p,index.protein],
+                                    addcovar=addcovar.p[,-1],
+                                    intcovar=intcovar.diet.p[,-1],
+                                    reml=TRUE)
+
+    # Plot
+    png(filename= paste(path, "Data/Output/Plots/Founder_effects/", type, "/", gene_name, "_chr", chromosome, "_", covariates, sep =""), height = 1018, width = 1280 )
+    coef_plot_diet_int.p <- plot_coefCC(coef_scan_diet_int.prot, map, scan1_output = lod.protein.dietint)
+    dev.off()
+    cat("Done with ", gene_name, "_chr", chromosome, "_", covariates)
+    
+  }
+  
+  if (covariates == "Sex Int" && chr != "20"){
+    # Scan / Protein / Interactive covariate: Sex
+    coef_scan_sex_int.prot <- scan1coef(genoprobs=probs[mice.with.data.p,][[chromosome]],
+                            kinship=K.LOCO.192.chr.p[[chromosome]],
+                            pheno=expr.protein.192[mice.with.data.p,index.protein],
+                            addcovar=addcovar.p[,-1],
+                            intcovar=intcovar.sex.p[,-1],
+                            reml=TRUE)
+
+    #Plot
+    png(filename= paste(path, "Data/Output/Plots/Founder_effects/", type, "/", gene_name, "_chr", chromosome, "_", covariates, sep =""), height = 1018, width = 1280 )
+    coef_plot_sex_int.p <- plot_coefCC(coef_scan_sex_int.prot, map, scan1_output = lod.protein.sexint)
+    dev.off()
+    cat("Done with ", gene_name, "_chr", chromosome, "_", covariates)
+   
+  }
+  
+}
+  
+  
+
+```
+
+
+
+## Plot Founder Effects 
+
+```{r}
+dir.create("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/DO192Liver/Data/Output/Plots/Founder_effects")
+setwd("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/DO192Liver/Data/Output/Plots/Founder_effects")
+```
+
+
+```{r, eval=F}
+
+## Protein
+
+# Set the working directory to put the plots in
+dir.create("/Users/c-allanb/Desktop/Benjamin_Allan-Rahill/DO192Liver/Data/Output/Plots/Founder_effects/Protein")
+setwd(paste(path, "Data/Output/Plots/Founder_effects/Protein", sep ="" ))
+
+
+plot
+# Set the device to PNG so that R writes .png files when it creates the plots 
+png(filename= paste(path, "Data/Output/Plots/Founder_effects/Protein/", gene_name, "_pQTL_Additive", sep =""), height = 1018, width = 1280 )
+coef_plot_add.p <- plot_coefCC(coef_scan_add.prot, map, scan1_output = lod.protein.addcovariatesonly)
+dev.off()
+
+png(filename= paste(path, "Data/Output/Plots/Founder_effects/Protein/", gene_name, "_pQTL_Diet_Int", sep =""), height = 1018, width = 1280 )
+coef_plot_diet_int.p <- plot_coefCC(coef_scan_diet_int.prot, map, scan1_output = lod.protein.dietint)
+dev.off()
+
+png(filename= paste(path, "Data/Output/Plots/Founder_effects/Protein/", gene_name, "_pQTL_Sex_Int", sep =""), height = 1018, width = 1280 )
+coef_plot_sex_int.p <- plot_coefCC(coef_scan_sex_int.prot, map, scan1_output = lod.protein.sexint)
+dev.off()
+
+
+
+
+
+```
+
+
+
+

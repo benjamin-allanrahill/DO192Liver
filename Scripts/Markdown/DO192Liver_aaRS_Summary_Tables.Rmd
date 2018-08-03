@@ -1,0 +1,214 @@
+---
+title: "DO192Liver QTL Summary Tables"
+author: "Ben Allan-Rahill"
+output: 
+  github_document: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# DO192Liver QTL Summary Tables
+
+### Load Data and Libraries
+```{r}
+file_path <- "/Users/c-allanb/Desktop/DO192Liver/Data/Output/peak_data/"
+peaks_diff_data.prot <- read.table(paste(file_path, "pQTL_coef_data", sep =""), header = TRUE, sep = "\t")
+peaks_diff_data.rna <- read.table(paste(file_path, "eQTL_coef_data", sep =""), header = TRUE, sep = "\t")
+```
+
+```{r}
+# specify users if switching between computers
+user <- "c-allanb"
+user2 <- "ballanrahill"
+```
+
+```{r, message=FALSE, warnings=FALSE}
+library(tidyverse)
+require(kableExtra)
+require(knitr)
+```
+
+## Collate
+```{r}
+# split into two data frames 
+
+peaks_diff_data.prot <- peaks_diff_data.prot %>% distinct(Gene, chr, Type, .keep_all = TRUE) %>%
+  filter(Type == "pQTL")
+
+peaks_diff_data.rna <- peaks_diff_data.rna %>% distinct(Gene, chr, Type, .keep_all = TRUE) %>%
+  filter(Type == "eQTL")
+```
+
+## Summarise
+#### Protein
+```{r}
+
+# Create empty tibble
+summary_tbl.prot <- tibble()
+
+
+## Protein
+  
+# sumarise specific columns of the pQTLs
+prot_covar_count <- peaks_diff_data.prot %>%
+  group_by(Covariates, Type) %>%
+  summarise(count = n())
+
+prot_type_count <- peaks_diff_data.prot %>%
+  group_by(QTL_Type) %>%
+  summarise(count = n())
+
+addt_count.prot <- nrow(peaks_diff_data.prot) - length(which(peaks_diff_data.prot$chr == 20))
+diet_int_count.prot <- prot_covar_count$count[2] 
+sex_int_count.prot <- prot_covar_count$count[3] 
+
+# assign counts to variables
+distant_count.prot <- prot_type_count$count[1]
+local_count.prot <- prot_type_count$count[2]
+
+# add back distant!!!!
+summary_tbl.prot <- data_frame(Type ="pQTL", Total = sum(addt_count.prot, diet_int_count.prot, sex_int_count.prot), Additive = addt_count.prot, Diet_Int = diet_int_count.prot, Sex_Int = sex_int_count.prot)
+```
+#### RNA 
+```{r}
+
+summary_tbl.rna <- tibble()
+
+## RNA
+
+# sumarise specific columns of the pQTLs
+rna_covar_count <- peaks_diff_data.rna %>%
+  group_by(Covariates) %>%
+  summarise(count = n())
+
+rna_type_count <- peaks_diff_data.rna %>%
+  group_by(QTL_Type) %>%
+  summarise(count = n())
+
+addt_count.rna <- nrow(peaks_diff_data.rna) - length(which(peaks_diff_data.rna$chr == 20))
+diet_int_count.rna <- rna_covar_count$count[2] 
+sex_int_count.rna <- rna_covar_count$count[3] 
+
+# assign counts to variables
+distant_count.rna <- rna_type_count$count[1]
+local_count.rna <- rna_type_count$count[2]
+
+summary_tbl.rna <- data_frame(Type = "eQTL", Total = sum(addt_count.rna, diet_int_count.rna, sex_int_count.rna), Additive = addt_count.rna, Diet_Int = diet_int_count.rna, Sex_Int = sex_int_count.rna)
+```
+
+```{r}
+
+# merge sumary tables together 
+summary_table <- bind_rows(summary_tbl.prot, summary_tbl.rna)
+
+kable(summary_table, caption = "Global Summary Table") %>%
+  kable_styling()
+
+```
+
+## Gene by gene
+```{r}
+
+####################
+# GENE BY GENE
+####################
+
+by_name.p <- peaks_diff_data.prot %>%
+  group_by(Gene)
+
+# specify df for covariates
+additive.p <- count(by_name.p)
+diet_int.p <- count(filter(by_name.p, Covariates == "Diet Int"))
+# join
+add_diet.p <- full_join(additive.p, diet_int.p, by = "Gene") %>%
+  rename("Additive" = n.x, "Diet_Int" = n.y) %>%
+  arrange(Gene)
+
+
+sex_int.p <- count(filter(by_name.p, Covariates == "Sex Int"))
+covar.p <- full_join(add_diet.p, sex_int.p, by = "Gene") %>%
+  rename("Sex_Int" = n) %>%
+  arrange(Gene)
+
+
+# specify df for QTL types
+distant.p <- count(filter(by_name.p, QTL_Type == "Distant"))
+local.p <- count(filter(by_name.p, QTL_Type == "Local"))
+
+# join the columns together 
+type.p <- full_join(distant.p, local.p, by = "Gene") %>%
+  rename("Distant" = n.x , "Local" = n.y) %>%
+  arrange(Gene)
+
+# join type and covariates 
+by_name.p <- covar.p %>%
+  arrange(Gene) %>%
+  mutate(QTL_Type = rep("pQTL"), Total = sum(Additive, Diet_Int, Sex_Int, na.rm = TRUE))
+```
+
+### For RNA
+```{r}
+### RNA ###
+
+by_name.rna <- peaks_diff_data.rna %>%
+  group_by(Gene)
+
+# specify df for covariates
+additive.rna <- count(by_name.rna)
+diet_int.rna <- count(filter(by_name.rna, Covariates == "Diet Int"))
+# join
+add_diet.rna <- full_join(additive.rna, diet_int.rna, by = "Gene") %>%
+  rename("Additive" = n.x, "Diet_Int" = n.y) %>%
+  arrange(Gene)
+
+
+sex_int.rna <- count(filter(by_name.rna, Covariates == "Sex Int"))
+covar.rna <- full_join(add_diet.rna, sex_int.rna, by = "Gene") %>%
+  rename("Sex_Int" = n) %>%
+  arrange(Gene)
+
+# specify df for QTL types
+distant.rna <- count(filter(by_name.rna, QTL_Type == "Distant"))
+local.rna <- count(filter(by_name.rna, QTL_Type == "Local"))
+
+# join the columns together 
+type.rna <- full_join(distant.rna, local.rna, by = "Gene") %>%
+  rename("Distant" = n.x , "Local" = n.y) %>%
+  arrange(Gene)
+
+# join type and covariates 
+by_name.rna <- covar.rna %>%
+  arrange(Gene) %>%
+  mutate(QTL_Type = rep("eQTL"), Total = sum(Additive, Diet_Int, Sex_Int, na.rm = TRUE))
+```
+
+```{r} 
+# combine dataframes
+by_name <- bind_rows(by_name.p, by_name.rna) %>%
+  arrange(Gene)
+
+kable(head(by_name), caption = "By Name Summary Table") %>%
+  kable_styling()
+
+```
+## Save the files 
+```{r}
+
+path <- paste("/Users/", user, "/Desktop/DO192Liver/Data/Output/Summary_Tables", sep="")
+
+
+dir.create(path)
+
+# write the global summary table
+write.table(summary_table, file = paste(path,"/DO192Liver_aaRS_QTL_Global_Summary_Table", sep=""), sep = "\t", row.names = FALSE)
+
+# Write the gene by gene summary table
+write.table(by_name, file = paste(path, "/DO192Liver_aaRS_QTL_Gene_Summary_Table", sep=""), sep = "\t", row.names = FALSE)
+
+```

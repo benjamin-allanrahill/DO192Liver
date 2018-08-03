@@ -1,0 +1,1085 @@
+Plots
+================
+
+Plots
+=====
+
+> **THIS IS A GIANT SCRIPT AND SHOULD BE USED MAINLY AS A NOTEBOOK OR RUN IN SMALL CHUNKS.**
+
+This script combines all the scripts to plot the density plots, the heat maps, the scatter plots, and PCA.
+
+The order is
+\* Allele effects density plots \* Allele effects box plots \* Heatmaps and denrograms \* Scatterplots \* PCA
+
+A few things that can be improved
+1. Variable naming is a little wacky because the script is so long. The variables should be named to specify wether they come from the DO or the CC data.
+
+### Load libraries
+
+``` r
+# install.packages("reshape")
+# install.packages("gplots")
+library(reshape)
+library(tidyverse)
+library(qtl2)
+library(gplots)
+library(tidyr)
+```
+
+Founder Coef Density Plots
+--------------------------
+
+Here we will use the coefficients retrieved from the scans in an earlier script to plot desnsity plor for the 8 founder strains.
+
+``` r
+# Read in .tsv
+coef_scan_data.p <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Scans/pQTL_coef_data", sep = "\t", header = TRUE))
+
+coef_scan_data.r <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Scans/eQTL_coef_data", sep = "\t", header = TRUE))
+
+
+coef_scan_data.p <- coef_scan_data.p %>%
+  filter(Covariates == "Additive", Type == "pQTL", lod >=7)
+
+coef_scan_data.r <- coef_scan_data.r %>%
+  filter(Covariates == "Additive", Type == "eQTL", lod >=7)
+
+coef_scan_data.int.p <-  coef_scan_data.p %>%
+  filter(Covariates == "Diet Int" | Covariates == "Sex Int", Type == "pQTL", lod >=7)
+
+coef_scan_data.int.r <-  coef_scan_data.r %>%
+  filter(Covariates == "Diet Int" | Covariates == "Sex Int", Type == "eQTL", lod >=7)
+```
+
+### Set up data
+
+``` r
+# transform the data so it is easy to use in gg plot 
+# TODO: find more efficient way to preform this function 
+
+# take each column and make it its own dataframe 
+
+## What it should like:
+####        Values| Founder 
+####            ##|##
+
+# Protein
+a_coef_data.p <- select(coef_scan_data.p, A) %>%
+  mutate(founder_strain = rep("A/J")) %>%
+  rename(coef = A)
+b_coef_data.p <- select(coef_scan_data.p, B) %>%
+  mutate(founder_strain = rep("C57BL/6J"))%>%
+  rename(coef = B)
+c_coef_data.p <- select(coef_scan_data.p, C) %>%
+  mutate(founder_strain = rep("129S1/SvImJ")) %>%
+  rename(coef = C)
+d_coef_data.p <- select(coef_scan_data.p, D) %>%
+  mutate(founder_strain = rep("NOD/ShiLtJ")) %>%
+  rename(coef = D)
+e_coef_data.p <- select(coef_scan_data.p, E) %>%
+  mutate(founder_strain = rep("NZO/HILtJ")) %>%
+  rename(coef = E)
+f_coef_data.p <- select(coef_scan_data.p, "F") %>%
+  mutate(founder_strain = rep("CAST/EiJ")) %>%
+  rename(coef = "F")
+g_coef_data.p <- select(coef_scan_data.p, G) %>%
+  mutate(founder_strain = rep("PWK/PhJ")) %>%
+  rename(coef = G)
+h_coef_data.p <- select(coef_scan_data.p, H) %>%
+  mutate(founder_strain = rep("WSB/EiJ")) %>%
+  rename(coef = H)
+```
+
+``` r
+# RNA
+a_coef_data.r <- select(coef_scan_data.r, A) %>%
+  mutate(founder_strain = rep("A/J")) %>%
+  rename(coef = A)
+b_coef_data.r <- select(coef_scan_data.r, B) %>%
+  mutate(founder_strain = rep("C57BL/6J"))%>%
+  rename(coef = B)
+c_coef_data.r <- select(coef_scan_data.r, C) %>%
+  mutate(founder_strain = rep("129S1/SvImJ")) %>%
+  rename(coef = C)
+d_coef_data.r <- select(coef_scan_data.r, D) %>%
+  mutate(founder_strain = rep("NOD/ShiLtJ")) %>%
+  rename(coef = D)
+e_coef_data.r <- select(coef_scan_data.r, E) %>%
+  mutate(founder_strain = rep("NZO/HILtJ")) %>%
+  rename(coef = E)
+f_coef_data.r <- select(coef_scan_data.r, "F") %>%
+  mutate(founder_strain = rep("CAST/EiJ")) %>%
+  rename(coef = "F")
+g_coef_data.r <- select(coef_scan_data.r, G) %>%
+  mutate(founder_strain = rep("PWK/PhJ")) %>%
+  rename(coef = G)
+h_coef_data.r <- select(coef_scan_data.r, H) %>%
+  mutate(founder_strain = rep("WSB/EiJ")) %>%
+  rename(coef = H)
+```
+
+``` r
+# Protein interactive 
+a_coef_data.int.p <- select(coef_scan_data.int.p, A) %>%
+  mutate(founder_strain = rep("A/J")) %>%
+  rename(coef = A)
+b_coef_data.int.p <- select(coef_scan_data.int.p, B) %>%
+  mutate(founder_strain = rep("C57BL/6J"))%>%
+  rename(coef = B)
+c_coef_data.int.p <- select(coef_scan_data.int.p, C) %>%
+  mutate(founder_strain = rep("129S1/SvImJ")) %>%
+  rename(coef = C)
+d_coef_data.int.p <- select(coef_scan_data.int.p, D) %>%
+  mutate(founder_strain = rep("NOD/ShiLtJ")) %>%
+  rename(coef = D)
+e_coef_data.int.p <- select(coef_scan_data.int.p, E) %>%
+  mutate(founder_strain = rep("NZO/HILtJ")) %>%
+  rename(coef = E)
+f_coef_data.int.p <- select(coef_scan_data.int.p, "F") %>%
+  mutate(founder_strain = rep("CAST/EiJ")) %>%
+  rename(coef = "F")
+g_coef_data.int.p <- select(coef_scan_data.int.p, G) %>%
+  mutate(founder_strain = rep("PWK/PhJ")) %>%
+  rename(coef = G)
+h_coef_data.int.p <- select(coef_scan_data.int.p, H) %>%
+  mutate(founder_strain = rep("WSB/EiJ")) %>%
+  rename(coef = H)
+```
+
+``` r
+# RNA interactive 
+a_coef_data.int.r <- select(coef_scan_data.int.r, A) %>%
+  mutate(founder_strain = rep("A/J")) %>%
+  rename(coef = A)
+b_coef_data.int.r <- select(coef_scan_data.int.r, B) %>%
+  mutate(founder_strain = rep("C57BL/6J"))%>%
+  rename(coef = B)
+c_coef_data.int.r <- select(coef_scan_data.int.r, C) %>%
+  mutate(founder_strain = rep("129S1/SvImJ")) %>%
+  rename(coef = C)
+d_coef_data.int.r <- select(coef_scan_data.int.r, D) %>%
+  mutate(founder_strain = rep("NOD/ShiLtJ")) %>%
+  rename(coef = D)
+e_coef_data.int.r <- select(coef_scan_data.int.r, E) %>%
+  mutate(founder_strain = rep("NZO/HILtJ")) %>%
+  rename(coef = E)
+f_coef_data.int.r <- select(coef_scan_data.int.r, "F") %>%
+  mutate(founder_strain = rep("CAST/EiJ")) %>%
+  rename(coef = "F")
+g_coef_data.int.r <- select(coef_scan_data.int.r, G) %>%
+  mutate(founder_strain = rep("PWK/PhJ")) %>%
+  rename(coef = G)
+h_coef_data.int.r <- select(coef_scan_data.int.r, H) %>%
+  mutate(founder_strain = rep("WSB/EiJ")) %>%
+  rename(coef = H) 
+```
+
+``` r
+# bind rows of each founder strains df 
+coef_scan_data.p <- bind_rows(a_coef_data.p, b_coef_data.p, c_coef_data.p, d_coef_data.p, e_coef_data.p, f_coef_data.p, g_coef_data.p, h_coef_data.p) 
+coef_scan_data.r <- bind_rows(a_coef_data.r, b_coef_data.r, c_coef_data.r, d_coef_data.r, e_coef_data.r, f_coef_data.r, g_coef_data.r, h_coef_data.r) 
+coef_scan_data.int.p <- bind_rows(a_coef_data.int.p, b_coef_data.int.p, c_coef_data.int.p, d_coef_data.int.p, e_coef_data.int.p, f_coef_data.int.p, g_coef_data.int.p, h_coef_data.int.p)
+coef_scan_data.int.r <- bind_rows(a_coef_data.int.r, b_coef_data.int.r, c_coef_data.int.r, d_coef_data.int.r, e_coef_data.int.r, f_coef_data.int.r, g_coef_data.int.r, h_coef_data.int.r)
+```
+
+``` r
+# clear data from memory to clean up 
+trash <- c(a_coef_data.p, b_coef_data.p, c_coef_data.p, d_coef_data.p, e_coef_data.p, f_coef_data.p, g_coef_data.p, h_coef_data.p, a_coef_data.r, b_coef_data.r, c_coef_data.r, d_coef_data.r, e_coef_data.r, f_coef_data.r, g_coef_data.r, h_coef_data.r, a_coef_data.int.p, b_coef_data.int.p, c_coef_data.int.p, d_coef_data.int.p, e_coef_data.int.p, f_coef_data.int.p, g_coef_data.int.p, h_coef_data.int.p, a_coef_data.int.r, b_coef_data.int.r, c_coef_data.int.r, d_coef_data.int.r, e_coef_data.int.r, f_coef_data.int.r, g_coef_data.int.r, h_coef_data.int.r) # vector of everything to remove
+
+rm(trash)
+```
+
+Here we will use ggplot to plot the density curves, specifying the colors for each strain and saving them to a specified path.
+
+``` r
+color_pallet <- c("A/J" = "#FFDC00", "C57BL/6J" = "#888888", "129S1/SvImJ" = "hotpink", "NOD/ShiLtJ" = "#0064C9", "NZO/HILtJ" = "deepskyblue", "CAST/EiJ" = "#2ECC40", "PWK/PhJ" = "#FF4136", "WSB/EiJ" = "#B10DC9") # specify the founder colors in the order that they appear in the data 
+```
+
+``` r
+# plot using ggplot and the founder strain colors 
+g <- ggplot(coef_scan_data.p, aes(x=coef, color = founder_strain)) + 
+      geom_line(stat = "density") + 
+      labs(title = "Founder Strain Density Plot pQTLs", x = "Founder Effects") +
+      # specify colors
+      scale_color_manual(values = color_pallet)
+ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Density_plot_Founder_coefs_pQTLs.png") 
+```
+
+    ## Saving 12 x 8 in image
+
+``` r
+g <- ggplot(coef_scan_data.r, aes(x=coef, color = founder_strain)) + 
+      geom_line(stat = "density") + 
+      labs(title = "Founder Strain Density Plot eQTLs", x = "Founder Effects") +
+      # specify colors
+      scale_color_manual(values = color_pallet)
+ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Density_plot_Founder_coefs_eQTLs.png")
+```
+
+    ## Saving 12 x 8 in image
+
+``` r
+g <- ggplot(coef_scan_data.int.p, aes(x=coef, color = founder_strain)) + 
+      geom_line(stat = "density") + 
+      labs(title = "Founder Strain Density Plot Interactive pQTLs", x = "Founder Effects") +
+      # specify colors
+      scale_color_manual(values = color_pallet)
+ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Density_plot_Founder_coefs_pQTLs_int.png")
+```
+
+    ## Saving 12 x 8 in image
+
+``` r
+g <- ggplot(coef_scan_data.int.r, aes(x=coef, color = founder_strain)) + 
+      geom_line(stat = "density") + 
+      labs(title = "Founder Strain Density Plot Interactive eQTLs", x = "Founder Effects") +
+      # specify colors
+      scale_color_manual(values = color_pallet)
+ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Density_plot_Founder_coefs_eQTLs_int.png")
+```
+
+    ## Saving 12 x 8 in image
+
+Box plots
+---------
+
+#### Protein
+
+``` r
+coef_violin_plot.p <- ggplot(coef_scan_data.p, aes(x = founder_strain, y = coef, color = founder_strain)) +
+  geom_violin(outlier.shape = 8) +
+  scale_color_manual(values = color_pallet)+
+  geom_jitter(shape=16, position=position_jitter(0.2))
+```
+
+    ## Warning: Ignoring unknown parameters: outlier.shape
+
+``` r
+coef_violin_plot.p
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-11-1.png" style="display: block; margin: auto;" /> \#\#\#\# RNA
+
+``` r
+coef_violin_plot.r <- ggplot(coef_scan_data.r, aes(x = founder_strain, y = coef, color = founder_strain)) +
+  geom_violin(outlier.shape = 8) +
+  scale_color_manual(values = color_pallet)+
+  geom_jitter(shape=16, position=position_jitter(0.2))
+```
+
+    ## Warning: Ignoring unknown parameters: outlier.shape
+
+``` r
+coef_violin_plot.r
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-12-1.png" style="display: block; margin: auto;" />
+
+DO Dendograms and Heat Maps
+---------------------------
+
+### Set up the data
+
+``` r
+# Ward Clustering
+
+# Read in .tsv
+coef_scan_data.p <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Scans/pQTL_coef_data", sep = "\t", header = TRUE))
+
+coef_scan_data.r <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Scans/eQTL_coef_data", sep = "\t", header = TRUE))
+```
+
+Here we will collate the data and arrange it in a matrix for the dendrograms and heatmaps. This section takes the input from above and selects the coefficients at each gene's QTL. It then reorders and converts it to a data matrix for use in the dendrograms and heatmaps below. This is done because the input for dendrograms has to be a numeric matrix. The rownames are converted into gene names so that they are labeled in the dendrogram.
+
+``` r
+##Proteins##
+
+# make sure there is only one QTL per gene 
+coef_only_names.p <- coef_scan_data.p %>%  #TODO: make sure that this is getting the peaks with the max LOD on that gene
+  distinct(Gene, .keep_all = TRUE)
+
+# retrive the allele effect coefficients and rename them 
+coef_only.p <- coef_only_names.p %>%
+  select(A:H)  %>%
+  rename("AJ" = A, "B6"= B, "S129S1" = C, "NOD" = D, "NZO" = E, "CAST" = "F", "PWK" = G, "WSB" = H) # specify founder names
+
+# reorder columns 
+coef_only.p <- coef_only.p[, order(colnames(coef_only.p))] # arrange in alphabetical order using the vector of `colnames`
+
+coef_only.p <- data.frame(coef_only.p, row.names = coef_only_names.p$Gene) # add the genes as row names 
+
+coef_only.p <- data.matrix(coef_only.p, rownames.force = TRUE) # convert to matrix and keep gene names
+
+##RNA##
+coef_only_names.r <- coef_scan_data.r %>%
+  distinct(Gene, .keep_all = TRUE)
+
+coef_only.r <- coef_only_names.r %>%
+  select( A:H) %>%
+  rename("AJ" = A, "B6"= B, "S129S1" = C, "NOD" = D, "NZO" = E, "CAST" = "F", "PWK" = G, "WSB" = H)
+
+coef_only.r <- coef_only.r[, order(colnames(coef_only.r))]
+
+coef_only.r <- data.frame(coef_only.r, row.names = coef_only_names.r$Gene) 
+
+coef_only.r <- data.matrix(coef_only.r, rownames.force = TRUE)
+```
+
+### DO Dendrograms
+
+This is the part that calculates the data needed for the dendrograms and then uses base R to plot them. It first creates a distance matrix using `dist()` and then uses the `hclust()` function for hierarchical clustering. I have specified the "Ward" method because this minimizes the variance between leaves, but another method can be specified if needed
+
+``` r
+dist.p <- dist(coef_only.p, method = "euclidean") # distance matrix
+fit.p  <- hclust(dist.p, method = "ward.D2") # hierarchical clustering using the WARD method for minimun variance
+plot(fit.p, main = "DO Dendrogram pQTL Genes", xlab = "Distance (Ward method for clustering)")
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-15-1.png" style="display: block; margin: auto;" />
+
+``` r
+dist.r <- dist(coef_only.r, method = "euclidean") # distance matrix
+fit.r  <- hclust(dist.r, method = "ward.D2") # hierarchical clustering using the WARD method for minimun variance
+plot(fit.r, main = "DO Dendrogram eQTL Genes", xlab = "Distance (Ward method for clustering)")
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-15-2.png" style="display: block; margin: auto;" />
+
+### DO Heatmaps
+
+This part of the script calculates the heatmaps using the R/gplots function `heatmap.2`. This is a really nice function and it recalculates the dendrograms supplies a histogram. I have also suplied the colors using R/qtl2's `CCcolors`. If you do not want to import R/qtl2, the colors can be specified and can be found at <http://compgen.unc.edu/wp/?page_id=577>.
+
+``` r
+# Write files using the png device 
+png(filename = "/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/DO192Liver_aaRS_pQTL_founder_heatmap.png", height = 1280, width = 1920)
+
+do_heat_map.p <- heatmap.2(coef_only.p, ColSideColors = CCcolors, main = "DO Allele Effects Heat Map pQTL", xlab = "Founder Strains", ylab = "aaRS Genes")
+
+# plot.p <- capture.output(do_heat_map.p)
+# 
+# plot.p
+
+dev.off()
+```
+
+    ## quartz_off_screen 
+    ##                 2
+
+``` r
+png(filename = "/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/DO192Liver_aaRS_eQTL_founder_heatmap.png", height = 1280, width = 1920)
+
+do_heat_map.r <- heatmap.2(coef_only.r, ColSideColors = CCcolors, main = "DO Allele Effects Heat Map eQTL", xlab = "Founder Strains", ylab = "aaRS Genes")
+
+# plot.r <- capture.output(do_heat_map.r)
+# 
+# plot.r
+
+dev.off()
+```
+
+    ## quartz_off_screen 
+    ##                 2
+
+Founder Heat Maps
+-----------------
+
+### Import Data
+
+``` r
+# Import founder data 
+load("/Users/c-allanb/Desktop/DO192Liver/Data/Input/DO192LiverData_Formattedfor_rQTL2.Rdata")
+load("/Users/c-allanb/Desktop/DO192Liver/Data/Input/FounderStrains_Liver_ProteinRNAexpression.Rdata")
+gene_names <- read.csv("/Users/c-allanb/Desktop/DO192Liver/Data/Input/aa-tRNA_Sequence_Names.csv", header = FALSE)
+```
+
+### Collate
+
+Here we will collate the data from the anotations bases off the `gene_names` table imported above.
+
+``` r
+collated_df.p <- annotations.protein.founders %>%
+  filter(Associated.Gene.Name %in% gene_names$V1) %>%
+  arrange(Associated.Gene.Name) # arrange genes in alphabetical order
+
+gene_ids <- row.names(annotations.rna.founders) # retrive row names to mutate next
+
+collated_df.r <- annotations.rna.founders %>%
+  mutate(Ensembl.Gene.ID = gene_ids) %>%  # use row names from above to add gene ID column 
+  filter(Associated.Gene.Name %in% gene_names$V1) %>%
+  arrange(Associated.Gene.Name)
+```
+
+Here we will collate the founder data for the genes that we want. The rownames of the original dataframe ar the names and ID's of the founders and we want to keep those when we convert the matrix to a tibble. We also only want the name of the founder, but the original DF has them named with IDs (i.e AJ\_14, etc.). We will split this into two colums and the delete the ID because we only need the name.
+
+``` r
+# Select expression data for the particular proteins &  RNA
+
+founder_names.p <- row.names(expr.protein.founders) # take the row names to be used as column later
+
+collated_expr.p <-  as_tibble(expr.protein.founders) %>%
+  select(collated_df.p$Ensembl.Protein.ID) %>%
+  mutate(Founders = founder_names.p)%>% # add "Founder" for later use
+  separate(Founders, into = c("Founder", "ID_Number"), sep = "_", remove = TRUE) %>% # Split the founder names into ID number and name
+  select(-one_of("ID_Number")) # delete the ID column 
+
+
+
+founder_names.r <- row.names(expr.rna.founders)
+
+collated_expr.r <-  as_tibble(expr.rna.founders) %>%
+  select(collated_df.r$Ensembl.Gene.ID) %>%
+  mutate(Founders = founder_names.r) %>%
+  separate(Founders, into = c("Founder", "ID_Number"), sep = "_", remove = TRUE) %>%
+  select(-one_of("ID_Number")) 
+```
+
+### Heat Maps
+
+Here we will calculate the mean expression for each founder because the heatmap only take one value for each cell. We will also rename and arrange the data so that it is in the right form for the heat maps.
+
+``` r
+#Calculate mean expression for each founder.
+mean_id.p <- collated_expr.p %>%
+  group_by(Founder) %>%
+  summarize_all(mean, na.rm = TRUE)
+
+#Change 129 to the right value
+mean_id.p[1,1] <- "S129S1"
+
+# sort alphabetically by founder
+mean_id.p <- mean_id.p %>%
+  arrange(Founder)
+
+#RNA
+mean_id.r <- collated_expr.r %>%
+  group_by(Founder) %>%
+  summarize_all(mean, na.rm = TRUE) 
+
+# mean_id.r[1,1] <- "S129S1"
+
+mean_id.r <- mean_id.r %>%
+  arrange(Founder)
+```
+
+``` r
+#Heat maps
+
+## Proteins ##
+#convert founders to row names
+expr_means.p <- data.frame(mean_id.p, row.names = mean_id.p$Founder)%>%
+  select(-one_of("Founder"))
+
+# rename colums with gene names
+ids <- colnames(expr_means.p)
+cols <- gene_names$V1
+cols <- setNames(ids, cols)
+
+expr_means.p <- expr_means.p %>% 
+  rename_(.dots = cols)
+
+# convert to sumeric matrix and keep row names
+expr_means.p <- data.matrix(expr_means.p, rownames.force = TRUE)
+# run heat map with col colors as the cc founder strains
+png(filename = "/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Heatmaps/Founder_Strains_aaRS_pQTL_founder_heatmap.png", height = 1280, width = 1920)
+cc_heatmap.p <- heatmap.2(expr_means.p, RowSideColors = c("#F08080","#FFDC00","#888888", "#2ECC40","#0064C9", "#7FDBFF","#FF4136","#B10DC9"),  main = "Founder Protein Abundance Heat Map", ylab = "Founder Strains", xlab = "aaRS Genes")
+dev.off()
+```
+
+    ## quartz_off_screen 
+    ##                 2
+
+``` r
+# cc_heatmap.p
+```
+
+``` r
+## RNA## 
+#convert founders to row names
+expr_means.r <- data.frame(mean_id.r, row.names = mean_id.r$Founder)%>%
+  select(-one_of("Founder"))
+
+# rename colums with gene names
+ids <- colnames(expr_means.r)
+cols <- gene_names$V1
+cols <- setNames(ids, cols)
+
+expr_means.r <- expr_means.r %>% 
+  rename_(.dots = cols)
+
+# convert to sumeric matrix and keep row names
+expr_means.r <- data.matrix(expr_means.r, rownames.force = TRUE)
+# run heat map with col colors as the cc founder strains
+png(filename = "/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Heatmaps/Founder_Strains_aaRS_eQTL_founder_heatmap.png", height = 1280, width = 1920)
+cc_heatmap.r <- heatmap.2(expr_means.r, RowSideColors = c("#FFDC00","#888888", "#2ECC40","#0064C9", "#7FDBFF","#FF4136","#F08080","#B10DC9"), main = "Founder RNA Expression Heat Map", ylab = "Founder Strains", xlab = "aaRS Genes")
+dev.off()
+```
+
+    ## quartz_off_screen 
+    ##                 2
+
+``` r
+# cc_heatmap.r
+```
+
+Scatter Plots
+-------------
+
+Here we will reimport the coef peak data and then we will collate that data for the scatter plots.
+
+``` r
+coef_scan_data.p <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/peak_data/pQTL_coef_data", sep = "\t", header = TRUE)) %>%
+  filter(Type == "pQTL")
+
+coef_scan_data.r <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/peak_data/eQTL_coef_data", sep = "\t", header = TRUE)) %>%
+  filter(Type == "eQTL")
+```
+
+### Add classification and lod function
+
+This part can be used later if the dist/local classification wants to be added to the plots, but it should still be run or the code below will break.
+
+``` r
+
+add_distant_local <- function(call, strain, effect, kind){
+  if (kind == "pQTL"){
+      
+    if (strain == "AJ"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.p$lod[coef_scan_data.p$A == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.p$QTL_Type[coef_scan_data.p$A == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "B6"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.p$lod[coef_scan_data.p$B == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.p$QTL_Type[coef_scan_data.p$B == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "CAST"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.p$lod[coef_scan_data.p$F == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.p$QTL_Type[coef_scan_data.p$F == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "NOD"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.p$lod[coef_scan_data.p$D == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.p$QTL_Type[coef_scan_data.p$D == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "NZO"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.p$lod[coef_scan_data.p$E == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.p$QTL_Type[coef_scan_data.p$E == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "PWK"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.p$lod[coef_scan_data.p$G == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.p$QTL_Type[coef_scan_data.p$G == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "129"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.p$lod[coef_scan_data.p$C == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.p$QTL_Type[coef_scan_data.p$C == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "WSB"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.p$lod[coef_scan_data.p$H == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.p$QTL_Type[coef_scan_data.p$H == effect]
+        return(peak_class)
+      }
+    }
+  }
+
+
+  if (kind == "eQTL"){
+      
+    if (strain == "AJ"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.r$lod[coef_scan_data.r$A == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.r$QTL_Type[coef_scan_data.r$A == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "B6"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.r$lod[coef_scan_data.r$B == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.r$QTL_Type[coef_scan_data.r$B == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "CAST"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.r$lod[coef_scan_data.r$F == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.r$QTL_Type[coef_scan_data.r$F == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "NOD"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.r$lod[coef_scan_data.r$D == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.r$QTL_Type[coef_scan_data.r$D == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "NZO"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.r$lod[coef_scan_data.r$E == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.r$QTL_Type[coef_scan_data.r$E == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "PWK"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.r$lod[coef_scan_data.r$G == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.r$QTL_Type[coef_scan_data.r$G == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "129"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.r$lod[coef_scan_data.r$C == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.r$QTL_Type[coef_scan_data.r$C == effect]
+        return(peak_class)
+      }
+    }
+    if (strain == "WSB"){
+      
+      if(call == "lod")
+      {
+        peak_lod <- coef_scan_data.r$lod[coef_scan_data.r$H == effect]
+        return(peak_lod)
+      }
+      if(call == "class"){
+        peak_class <- coef_scan_data.r$QTL_Type[coef_scan_data.r$H == effect]
+        return(peak_class)
+      }
+    }
+  }
+
+
+}
+```
+
+### Collate the data
+
+``` r
+#transpose 
+coef_only_df.p <- t(coef_only.p)
+
+#retrieve column names 
+do_col_names.p <- colnames(coef_only_df.p)
+
+#convert back to data frames 
+coef_only_df.p <- as_data_frame(coef_only_df.p) %>%
+    gather(gene, effects, Aars:Yars2) 
+
+expr_means_df.p <- as_data_frame(expr_means.p)%>% 
+    select(one_of(do_col_names.p))  %>% 
+    gather(gene, expression, Aars:Yars2) 
+
+#combine data frames 
+scatter_plot_data.p <- bind_cols(coef_only_df.p, expr_means_df.p) %>%
+  select(-one_of("gene1"))
+
+# add founder names so that the data can be colored by them later 
+scatter_plot_data.p <- scatter_plot_data.p %>% 
+  mutate(Founder = rep(c("AJ", "B6", "CAST", "NOD", "NZO", "PWK", "129", "WSB"), times = nrow(scatter_plot_data.p)/8)) # this can be done because the data goes in alphabetical order
+
+scatter_plot_data.p <- scatter_plot_data.p %>%
+  rowwise() %>%
+  mutate(LOD = add_distant_local("lod", Founder, effects, "pQTL"), Type = add_distant_local("class", Founder, effects, "pQTL")) # add classification using the function above
+```
+
+``` r
+#Specify Color pallet 
+founder_colors = c( "#F08080","#FFDC00", "#888888", "#2ECC40", "#0064C9", "#7FDBFF", "#FF4136", "#B10DC9" )
+```
+
+``` r
+# plot 
+scat_plot_gene.p <- ggplot(scatter_plot_data.p, aes(effects, expression))+ 
+  geom_point(size = 2, alpha = .6, aes(color= Founder)) +
+  geom_smooth(method=lm, alpha = 0.6) +
+  facet_wrap("gene") + 
+  scale_color_manual(values = founder_colors)+  # specify colors
+  labs(title = "Gene by Gene Effects v Expression pQTLs")
+
+scat_plot_gene.p # print to console
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-27-1.png" style="display: block; margin: auto;" />
+
+``` r
+ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/pQTL/DO192Liver_effects_v_CC_expression_byGene.png")
+```
+
+    ## Saving 12 x 8 in image
+
+``` r
+scat_plot_founder.p <- ggplot(scatter_plot_data.p, aes(effects, expression,  color = Founder))+ 
+  geom_smooth(method=lm, alpha = 0.6) +
+  geom_point(size = 2, alpha = .6) + 
+  scale_color_manual(values = founder_colors) +
+  facet_wrap("Founder")+
+  labs(title = "DO Inferred Allele Effects v. CC Expression pQTL")
+
+scat_plot_founder.p # print to console
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-27-2.png" style="display: block; margin: auto;" />
+
+``` r
+ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/pQTL/DO192Liver_effects_v_CC_expression_byFounder.png")
+```
+
+    ## Saving 12 x 8 in image
+
+Here we will repeat the same process for the RNA data.
+
+``` r
+## RNA ##
+#transpose 
+coef_only_df.r <- t(coef_only.r)
+
+#retrieve column names 
+do_col_names.r <- colnames(coef_only_df.r)
+
+#convert back to data frames 
+coef_only_df.r <- as_data_frame(coef_only_df.r) %>%
+    gather(gene, effects, Aars2:Yars) 
+
+expr_means_df.r <- as_data_frame(expr_means.r)%>% 
+    select(one_of(do_col_names.r))  %>% 
+    gather(gene, expression, Aars2:Yars) 
+
+#combine data frames 
+
+scatter_plot_data.r <- bind_cols(coef_only_df.r, expr_means_df.r) %>%
+  select(-one_of("gene1")) 
+scatter_plot_data.r <- scatter_plot_data.r %>%
+  mutate(Founder = rep(c("AJ", "B6", "CAST", "NOD", "NZO", "PWK", "129", "WSB"), times = nrow(scatter_plot_data.r)/8))
+scatter_plot_data.r <- scatter_plot_data.r %>%
+  rowwise() %>%
+  mutate(LOD = add_distant_local("lod", Founder, effects, "eQTL"), Type = add_distant_local("class", Founder, effects, "eQTL"))
+```
+
+``` r
+# plot 
+scat_plot_gene.r <- ggplot(scatter_plot_data.r, aes(effects, expression))+ 
+  geom_point(size = 2, alpha = .6, aes(color = Founder)) +
+  geom_smooth(method=lm, alpha = 0.6) +
+  facet_wrap("gene") + 
+  labs(title = "Gene by Gene Effects v Expression eQTLs") + 
+  scale_color_manual(values = founder_colors)
+
+scat_plot_gene.r # print to console
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-29-1.png" style="display: block; margin: auto;" />
+
+``` r
+ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/eQTL/DO192Liver_effects_v_CC_expression_byGene_point.png")
+```
+
+    ## Saving 12 x 8 in image
+
+``` r
+scat_plot_founder.r <- ggplot(scatter_plot_data.r, aes(effects, expression)) +
+  geom_point(size = 2, alpha = .6 , aes(color = Founder)) +
+  geom_smooth(method=lm, alpha = 0.6) +
+  scale_color_manual(values = founder_colors) + 
+  facet_wrap(~Founder)+
+  labs(title = "DO Inferred Allele Effects v. CC Expression eQTL")
+
+scat_plot_founder.r # print to console
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-29-2.png" style="display: block; margin: auto;" />
+
+``` r
+ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/eQTL/DO192Liver_effects_v_CC_expression_byFounder_smooth.png")
+```
+
+    ## Saving 12 x 8 in image
+
+### Per gene scatter plots
+
+Here we will create plots for each gene using a for loop. This is so we can have "zoomed-in" plots to look at.
+
+``` r
+#Recursively create smooth plots for each gene 
+##PROTEIN##
+for (gene_name in do_col_names.p){
+  
+  data <- scatter_plot_data.p %>% # get the specific genes data 
+    filter(gene == gene_name)
+  
+  g <- ggplot(data, aes(effects, expression))+ 
+  geom_smooth(method=lm, alpha = 0.6) +
+  geom_point(size = 2, alpha = .6, aes(color = Founder)) +
+  scale_color_manual(values = founder_colors) + # add founder colors
+  labs(title = paste(gene_name, "Allele effects vs. CC expression pQTL"))
+
+  ggsave(paste("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/pQTL/", gene_name,"_DO192Liver_effects_v_CC_expression_smooth.png")) # save the file 
+  
+}
+
+for (gene_name in do_col_names.r){
+  
+  data <- scatter_plot_data.r %>%
+    filter(gene == gene_name)
+  
+  g <- ggplot(data, aes(effects, expression))+ 
+  geom_smooth(method=lm, alpha = 0.6) +
+  geom_point(size = 2, alpha = .6, aes(color = Founder)) +
+  scale_color_manual(values = founder_colors) +
+  labs(title = paste(gene_name, "Allele effects vs. CC expression eQTL"))
+
+  ggsave(paste("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/eQTL/", gene_name,"_DO192Liver_effects_v_CC_expression_smooth.png"))
+  
+}
+```
+
+### Gene Against Gene Scatter Plot
+
+This part of the script scan be used to plot individual genes against each other to look at their expression
+
+``` r
+gene.x <- "Pars2" #gene to be mapped on the x axis
+gene.y <- "Iars2" #gene to be mapped on the y axis 
+```
+
+``` r
+# Get DO data 
+
+do_data.p.x <- as_tibble(expr.protein.192) %>%
+  select(annotations.protein.192$Ensembl.Protein.ID[annotations.protein.192$Associated.Gene.Name == gene.x])%>%
+  rename(
+      DO.x = paste(annotations.protein.192$Ensembl.Protein.ID[annotations.protein.192$Associated.Gene.Name == gene.x])
+  )
+
+do_data.p.y <- as_tibble(expr.protein.192) %>%
+  select(annotations.protein.192$Ensembl.Protein.ID[annotations.protein.192$Associated.Gene.Name == gene.y])%>%
+  rename(
+      DO.y = paste(annotations.protein.192$Ensembl.Protein.ID[annotations.protein.192$Associated.Gene.Name == gene.y])
+  )
+```
+
+``` r
+# save row names
+founder_names.p <- row.names(expr.protein.founders)
+founder_names.r <- row.names(expr.rna.founders)
+```
+
+#### Protein
+
+``` r
+# Collate 
+founder_data.p.x <- as_tibble(expr.protein.founders) %>%
+  select(annotations.protein.founders$Ensembl.Protein.ID[annotations.protein.founders$Associated.Gene.Name == gene.x]) %>%
+  mutate(Founders = founder_names.p)%>%
+  separate(Founders, into = c("Founder", "ID_Number"), sep = "_", remove = TRUE) %>%
+  select(-one_of("ID_Number")) %>%
+  add_row(Founder = rep(NA, times = nrow(do_data.p.x)- length(founder_names.p))) %>%
+    rename(
+      founder.x = paste(annotations.protein.founders$Ensembl.Protein.ID[annotations.protein.founders$Associated.Gene.Name == gene.x])
+    )
+```
+
+``` r
+founder_data.p.y <- as_tibble(expr.protein.founders) %>%
+  select(annotations.protein.founders$Ensembl.Protein.ID[annotations.protein.founders$Associated.Gene.Name == gene.y]) %>%
+  mutate(Founders = founder_names.p)%>%
+  separate(Founders, into = c("Founder", "ID_Number"), sep = "_", remove = TRUE) %>%
+  select(-one_of("ID_Number"))%>%
+  add_row(Founder = rep(NA, times = nrow(do_data.p.y)- length(founder_names.p))) %>%
+    rename(
+      founder.y = paste(annotations.protein.founders$Ensembl.Protein.ID[annotations.protein.founders$Associated.Gene.Name == gene.y])
+    )
+```
+
+#### RNA
+
+TODO Some of the RNA data is not availible so this function will break. It needs to be updated for future use. This is commented out for now
+
+``` r
+# founder_data.r.x <- as_tibble(expr.rna.founders) %>%
+#   select(annotations.protein.founders$Ensembl.Gene.ID[annotations.protein.founders$Associated.Gene.Name == gene.x]) %>% # use protein annotations because of the gene ID
+#   mutate(Founders = founder_names.r)%>%
+#   separate(Founders, into = c("Founder", "ID_Number"), sep = "_", remove = TRUE) %>%
+#   select(-one_of("ID_Number")) 
+```
+
+``` r
+# founder_data.r.y <- as_tibble(expr.rna.founders) %>%
+#   select(annotations.protein.founders$Ensembl.Protein.ID[annotations.protein.founders$Associated.Gene.Name == gene.y]) %>%
+#   mutate(Founders = founder_names.r)%>%
+#   separate(Founders, into = c("Founder", "ID_Number"), sep = "_", remove = TRUE) %>%
+#   select(-one_of("ID_Number")) 
+```
+
+``` r
+# Combine dataframes 
+specific_genes_data.p <- bind_cols(founder_data.p.x, founder_data.p.y, do_data.p.x, do_data.p.y) %>%
+  select(-one_of("Founder1"))
+```
+
+Scatter Plots
+
+If RNA expression wants to plotted, the plotting funtion below needs to be copied and run with the RNA above.
+
+``` r
+specific_genes_plot.p <- ggplot(specific_genes_data.p) +
+  geom_point(size = 3, alpha = .6, aes(founder.x, founder.y, color = Founder)) + 
+  geom_smooth(method=lm, alpha = 0.1, aes(founder.x, founder.y)) +
+  geom_point(size = 1, color = "gray", aes(DO.x, DO.y)) + 
+  geom_smooth(method = lm, alpha = .6, aes(DO.x, DO.y)) +
+  labs(title = paste(gene.x, "v.", gene.y, "Protein Expression (DO expression in gray)"), x = paste(gene.x, "Expression"), y = paste(gene.y, "Expression")) +
+  theme_classic()
+
+specific_genes_plot.p
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-39-1.png" style="display: block; margin: auto;" />
+
+``` r
+ggsave(paste("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/Specific/", gene.x, "_v_", gene.y, "_protein_expression_CC_plot.png", sep = ""))
+```
+
+    ## Saving 12 x 8 in image
+
+PCA
+---
+
+Here is the quick PCA for the DO coefficients and the CC expression.
+
+``` r
+##Principal Component analysis  (ALLELE EFFECTS v GENE)
+pca_effects.p <- prcomp(coef_only.p, center = T, scale = T)
+pca_effects.r <- prcomp(coef_only.r, center =T, scale = T)
+```
+
+``` r
+##Principal Component analysis  (FOUNDER EXPRESSION v GENE)
+pca_expr.p <- prcomp(t(expr_means.p), center = T, scale = T) # transpose to flip rownames and col names
+pca_expr.r <- prcomp(t(expr_means.r), center =T, scale = T)
+```
+
+``` r
+# Pairs plots for the PCs 
+pca_effects_plot.p <- pairs(pca_effects.p$x, 
+                            # col = founder_colors
+                             main = "DO Allele Effects PCA pQTL" )
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-42-1.png" style="display: block; margin: auto;" />
+
+``` r
+pca_effects_plot.r <- pairs(pca_effects.r$x, 
+                            # col = founder_colors
+                            main = "DO Allele Effects PCA eQTL" )
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-42-2.png" style="display: block; margin: auto;" />
+
+``` r
+pca_expr_plot.p <- pairs(pca_expr.p$x, 
+                         # col = founder_colors
+                         main = "CC Expression PCA pQTL" )
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-42-3.png" style="display: block; margin: auto;" />
+
+``` r
+pca_expr_plot.r <- pairs(pca_expr.r$x, 
+                         # col = founder_colors
+                         main = "CC Expression PCA eQTL" )
+```
+
+<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-42-4.png" style="display: block; margin: auto;" />
