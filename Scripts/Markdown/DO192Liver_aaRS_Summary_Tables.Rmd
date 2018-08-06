@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Load Data and Libraries
 ```{r}
-file_path <- "/Users/c-allanb/Desktop/DO192Liver/Data/Output/peak_data/"
+file_path <- "/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/peak_data/"
 peaks_diff_data.prot <- read.table(paste(file_path, "pQTL_coef_data", sep =""), header = TRUE, sep = "\t")
 peaks_diff_data.rna <- read.table(paste(file_path, "eQTL_coef_data", sep =""), header = TRUE, sep = "\t")
 ```
@@ -73,7 +73,7 @@ distant_count.prot <- prot_type_count$count[1]
 local_count.prot <- prot_type_count$count[2]
 
 # add back distant!!!!
-summary_tbl.prot <- data_frame(Type ="pQTL", Total = sum(addt_count.prot, diet_int_count.prot, sex_int_count.prot), Additive = addt_count.prot, Diet_Int = diet_int_count.prot, Sex_Int = sex_int_count.prot)
+summary_tbl.prot <- data_frame(Type ="pQTL", Total = addt_count.prot, Distant = distant_count.prot, Local = local_count.prot)
 ```
 #### RNA 
 ```{r}
@@ -99,7 +99,7 @@ sex_int_count.rna <- rna_covar_count$count[3]
 distant_count.rna <- rna_type_count$count[1]
 local_count.rna <- rna_type_count$count[2]
 
-summary_tbl.rna <- data_frame(Type = "eQTL", Total = sum(addt_count.rna, diet_int_count.rna, sex_int_count.rna), Additive = addt_count.rna, Diet_Int = diet_int_count.rna, Sex_Int = sex_int_count.rna)
+summary_tbl.rna <- data_frame(Type = "eQTL", Total = addt_count.rna, Distant = distant_count.rna, Local = local_count.rna)
 ```
 
 ```{r}
@@ -200,7 +200,7 @@ kable(head(by_name), caption = "By Name Summary Table") %>%
 ## Save the files 
 ```{r}
 
-path <- paste("/Users/", user, "/Desktop/DO192Liver/Data/Output/Summary_Tables", sep="")
+path <- paste("/Users/", user, "/Desktop/DO192Liver_aaRS/Data/Output/Summary_Tables", sep="")
 
 
 dir.create(path)
