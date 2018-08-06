@@ -33,9 +33,9 @@ Here we will use the coefficients retrieved from the scans in an earlier script 
 
 ``` r
 # Read in .tsv
-coef_scan_data.p <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Scans/pQTL_coef_data", sep = "\t", header = TRUE))
+coef_scan_data.p <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Scans/pQTL_coef_data", sep = "\t", header = TRUE))
 
-coef_scan_data.r <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Scans/eQTL_coef_data", sep = "\t", header = TRUE))
+coef_scan_data.r <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Scans/eQTL_coef_data", sep = "\t", header = TRUE))
 
 
 coef_scan_data.p <- coef_scan_data.p %>%
@@ -202,7 +202,7 @@ g <- ggplot(coef_scan_data.p, aes(x=coef, color = founder_strain)) +
       labs(title = "Founder Strain Density Plot pQTLs", x = "Founder Effects") +
       # specify colors
       scale_color_manual(values = color_pallet)
-ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Density_plot_Founder_coefs_pQTLs.png") 
+ggsave("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Density_plot_Founder_coefs_pQTLs.png") 
 ```
 
     ## Saving 12 x 8 in image
@@ -213,7 +213,7 @@ g <- ggplot(coef_scan_data.r, aes(x=coef, color = founder_strain)) +
       labs(title = "Founder Strain Density Plot eQTLs", x = "Founder Effects") +
       # specify colors
       scale_color_manual(values = color_pallet)
-ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Density_plot_Founder_coefs_eQTLs.png")
+ggsave("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Density_plot_Founder_coefs_eQTLs.png")
 ```
 
     ## Saving 12 x 8 in image
@@ -224,7 +224,7 @@ g <- ggplot(coef_scan_data.int.p, aes(x=coef, color = founder_strain)) +
       labs(title = "Founder Strain Density Plot Interactive pQTLs", x = "Founder Effects") +
       # specify colors
       scale_color_manual(values = color_pallet)
-ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Density_plot_Founder_coefs_pQTLs_int.png")
+ggsave("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Density_plot_Founder_coefs_pQTLs_int.png")
 ```
 
     ## Saving 12 x 8 in image
@@ -235,7 +235,7 @@ g <- ggplot(coef_scan_data.int.r, aes(x=coef, color = founder_strain)) +
       labs(title = "Founder Strain Density Plot Interactive eQTLs", x = "Founder Effects") +
       # specify colors
       scale_color_manual(values = color_pallet)
-ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Density_plot_Founder_coefs_eQTLs_int.png")
+ggsave("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Density_plot_Founder_coefs_eQTLs_int.png")
 ```
 
     ## Saving 12 x 8 in image
@@ -258,7 +258,7 @@ coef_violin_plot.p <- ggplot(coef_scan_data.p, aes(x = founder_strain, y = coef,
 coef_violin_plot.p
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-11-1.png" style="display: block; margin: auto;" /> \#\#\#\# RNA
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-11-1.png" style="display: block; margin: auto;" /> \#\#\#\# RNA
 
 ``` r
 coef_violin_plot.r <- ggplot(coef_scan_data.r, aes(x = founder_strain, y = coef, color = founder_strain)) +
@@ -273,7 +273,7 @@ coef_violin_plot.r <- ggplot(coef_scan_data.r, aes(x = founder_strain, y = coef,
 coef_violin_plot.r
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-12-1.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-12-1.png" style="display: block; margin: auto;" />
 
 DO Dendograms and Heat Maps
 ---------------------------
@@ -284,9 +284,9 @@ DO Dendograms and Heat Maps
 # Ward Clustering
 
 # Read in .tsv
-coef_scan_data.p <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Scans/pQTL_coef_data", sep = "\t", header = TRUE))
+coef_scan_data.p <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Scans/pQTL_coef_data", sep = "\t", header = TRUE))
 
-coef_scan_data.r <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Scans/eQTL_coef_data", sep = "\t", header = TRUE))
+coef_scan_data.r <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Scans/eQTL_coef_data", sep = "\t", header = TRUE))
 ```
 
 Here we will collate the data and arrange it in a matrix for the dendrograms and heatmaps. This section takes the input from above and selects the coefficients at each gene's QTL. It then reorders and converts it to a data matrix for use in the dendrograms and heatmaps below. This is done because the input for dendrograms has to be a numeric matrix. The rownames are converted into gene names so that they are labeled in the dendrogram.
@@ -335,7 +335,7 @@ fit.p  <- hclust(dist.p, method = "ward.D2") # hierarchical clustering using the
 plot(fit.p, main = "DO Dendrogram pQTL Genes", xlab = "Distance (Ward method for clustering)")
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-15-1.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-15-1.png" style="display: block; margin: auto;" />
 
 ``` r
 dist.r <- dist(coef_only.r, method = "euclidean") # distance matrix
@@ -343,7 +343,7 @@ fit.r  <- hclust(dist.r, method = "ward.D2") # hierarchical clustering using the
 plot(fit.r, main = "DO Dendrogram eQTL Genes", xlab = "Distance (Ward method for clustering)")
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-15-2.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-15-2.png" style="display: block; margin: auto;" />
 
 ### DO Heatmaps
 
@@ -351,7 +351,7 @@ This part of the script calculates the heatmaps using the R/gplots function `hea
 
 ``` r
 # Write files using the png device 
-png(filename = "/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/DO192Liver_aaRS_pQTL_founder_heatmap.png", height = 1280, width = 1920)
+png(filename = "/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/DO192Liver_aaRS_aaRS_pQTL_founder_heatmap.png", height = 1280, width = 1920)
 
 do_heat_map.p <- heatmap.2(coef_only.p, ColSideColors = CCcolors, main = "DO Allele Effects Heat Map pQTL", xlab = "Founder Strains", ylab = "aaRS Genes")
 
@@ -366,7 +366,7 @@ dev.off()
     ##                 2
 
 ``` r
-png(filename = "/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/DO192Liver_aaRS_eQTL_founder_heatmap.png", height = 1280, width = 1920)
+png(filename = "/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/DO192Liver_aaRS_aaRS_eQTL_founder_heatmap.png", height = 1280, width = 1920)
 
 do_heat_map.r <- heatmap.2(coef_only.r, ColSideColors = CCcolors, main = "DO Allele Effects Heat Map eQTL", xlab = "Founder Strains", ylab = "aaRS Genes")
 
@@ -387,9 +387,9 @@ Founder Heat Maps
 
 ``` r
 # Import founder data 
-load("/Users/c-allanb/Desktop/DO192Liver/Data/Input/DO192LiverData_Formattedfor_rQTL2.Rdata")
-load("/Users/c-allanb/Desktop/DO192Liver/Data/Input/FounderStrains_Liver_ProteinRNAexpression.Rdata")
-gene_names <- read.csv("/Users/c-allanb/Desktop/DO192Liver/Data/Input/aa-tRNA_Sequence_Names.csv", header = FALSE)
+load("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Input/DO192LiverData_Formattedfor_rQTL2.Rdata")
+load("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Input/FounderStrains_Liver_ProteinRNAexpression.Rdata")
+gene_names <- read.csv("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Input/aa-tRNA_Sequence_Names.csv", header = FALSE)
 ```
 
 ### Collate
@@ -480,7 +480,7 @@ expr_means.p <- expr_means.p %>%
 # convert to sumeric matrix and keep row names
 expr_means.p <- data.matrix(expr_means.p, rownames.force = TRUE)
 # run heat map with col colors as the cc founder strains
-png(filename = "/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Heatmaps/Founder_Strains_aaRS_pQTL_founder_heatmap.png", height = 1280, width = 1920)
+png(filename = "/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Heatmaps/Founder_Strains_aaRS_pQTL_founder_heatmap.png", height = 1280, width = 1920)
 cc_heatmap.p <- heatmap.2(expr_means.p, RowSideColors = c("#F08080","#FFDC00","#888888", "#2ECC40","#0064C9", "#7FDBFF","#FF4136","#B10DC9"),  main = "Founder Protein Abundance Heat Map", ylab = "Founder Strains", xlab = "aaRS Genes")
 dev.off()
 ```
@@ -509,7 +509,7 @@ expr_means.r <- expr_means.r %>%
 # convert to sumeric matrix and keep row names
 expr_means.r <- data.matrix(expr_means.r, rownames.force = TRUE)
 # run heat map with col colors as the cc founder strains
-png(filename = "/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Heatmaps/Founder_Strains_aaRS_eQTL_founder_heatmap.png", height = 1280, width = 1920)
+png(filename = "/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Heatmaps/Founder_Strains_aaRS_eQTL_founder_heatmap.png", height = 1280, width = 1920)
 cc_heatmap.r <- heatmap.2(expr_means.r, RowSideColors = c("#FFDC00","#888888", "#2ECC40","#0064C9", "#7FDBFF","#FF4136","#F08080","#B10DC9"), main = "Founder RNA Expression Heat Map", ylab = "Founder Strains", xlab = "aaRS Genes")
 dev.off()
 ```
@@ -527,10 +527,10 @@ Scatter Plots
 Here we will reimport the coef peak data and then we will collate that data for the scatter plots.
 
 ``` r
-coef_scan_data.p <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/peak_data/pQTL_coef_data", sep = "\t", header = TRUE)) %>%
+coef_scan_data.p <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/peak_data/pQTL_coef_data", sep = "\t", header = TRUE)) %>%
   filter(Type == "pQTL")
 
-coef_scan_data.r <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver/Data/Output/peak_data/eQTL_coef_data", sep = "\t", header = TRUE)) %>%
+coef_scan_data.r <- as_tibble(read.table("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/peak_data/eQTL_coef_data", sep = "\t", header = TRUE)) %>%
   filter(Type == "eQTL")
 ```
 
@@ -781,6 +781,8 @@ scatter_plot_data.p <- scatter_plot_data.p %>%
 founder_colors = c( "#F08080","#FFDC00", "#888888", "#2ECC40", "#0064C9", "#7FDBFF", "#FF4136", "#B10DC9" )
 ```
 
+### Scatter plots
+
 ``` r
 # plot 
 scat_plot_gene.p <- ggplot(scatter_plot_data.p, aes(effects, expression))+ 
@@ -793,10 +795,10 @@ scat_plot_gene.p <- ggplot(scatter_plot_data.p, aes(effects, expression))+
 scat_plot_gene.p # print to console
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-27-1.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-27-1.png" style="display: block; margin: auto;" />
 
 ``` r
-ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/pQTL/DO192Liver_effects_v_CC_expression_byGene.png")
+ggsave("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Scatter_plots/pQTL/DO192Liver_aaRS_effects_v_CC_expression_byGene.png")
 ```
 
     ## Saving 12 x 8 in image
@@ -812,10 +814,10 @@ scat_plot_founder.p <- ggplot(scatter_plot_data.p, aes(effects, expression,  col
 scat_plot_founder.p # print to console
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-27-2.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-27-2.png" style="display: block; margin: auto;" />
 
 ``` r
-ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/pQTL/DO192Liver_effects_v_CC_expression_byFounder.png")
+ggsave("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Scatter_plots/pQTL/DO192Liver_aaRS_effects_v_CC_expression_byFounder.png")
 ```
 
     ## Saving 12 x 8 in image
@@ -861,17 +863,17 @@ scat_plot_gene.r <- ggplot(scatter_plot_data.r, aes(effects, expression))+
 scat_plot_gene.r # print to console
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-29-1.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-29-1.png" style="display: block; margin: auto;" />
 
 ``` r
-ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/eQTL/DO192Liver_effects_v_CC_expression_byGene_point.png")
+ggsave("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Scatter_plots/eQTL/DO192Liver_aaRS_effects_v_CC_expression_byGene_point.png")
 ```
 
     ## Saving 12 x 8 in image
 
 ``` r
-scat_plot_founder.r <- ggplot(scatter_plot_data.r, aes(effects, expression)) +
-  geom_point(size = 2, alpha = .6 , aes(color = Founder)) +
+scat_plot_founder.r <- ggplot(scatter_plot_data.r, aes(effects, expression, color = Founder)) +
+  geom_point(size = 2, alpha = .6 ) +
   geom_smooth(method=lm, alpha = 0.6) +
   scale_color_manual(values = founder_colors) + 
   facet_wrap(~Founder)+
@@ -880,10 +882,10 @@ scat_plot_founder.r <- ggplot(scatter_plot_data.r, aes(effects, expression)) +
 scat_plot_founder.r # print to console
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-29-2.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-29-2.png" style="display: block; margin: auto;" />
 
 ``` r
-ggsave("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/eQTL/DO192Liver_effects_v_CC_expression_byFounder_smooth.png")
+ggsave("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Scatter_plots/eQTL/DO192Liver_aaRS_effects_v_CC_expression_byFounder_smooth.png")
 ```
 
     ## Saving 12 x 8 in image
@@ -906,7 +908,7 @@ for (gene_name in do_col_names.p){
   scale_color_manual(values = founder_colors) + # add founder colors
   labs(title = paste(gene_name, "Allele effects vs. CC expression pQTL"))
 
-  ggsave(paste("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/pQTL/", gene_name,"_DO192Liver_effects_v_CC_expression_smooth.png")) # save the file 
+  ggsave(paste("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Scatter_plots/pQTL/", gene_name,"_DO192Liver_aaRS_effects_v_CC_expression_smooth.png")) # save the file 
   
 }
 
@@ -921,7 +923,7 @@ for (gene_name in do_col_names.r){
   scale_color_manual(values = founder_colors) +
   labs(title = paste(gene_name, "Allele effects vs. CC expression eQTL"))
 
-  ggsave(paste("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/eQTL/", gene_name,"_DO192Liver_effects_v_CC_expression_smooth.png"))
+  ggsave(paste("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Scatter_plots/eQTL/", gene_name,"_DO192Liver_aaRS_effects_v_CC_expression_smooth.png"))
   
 }
 ```
@@ -1026,10 +1028,10 @@ specific_genes_plot.p <- ggplot(specific_genes_data.p) +
 specific_genes_plot.p
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-39-1.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-39-1.png" style="display: block; margin: auto;" />
 
 ``` r
-ggsave(paste("/Users/c-allanb/Desktop/DO192Liver/Data/Output/Plots/Scatter_plots/Specific/", gene.x, "_v_", gene.y, "_protein_expression_CC_plot.png", sep = ""))
+ggsave(paste("/Users/c-allanb/Desktop/DO192Liver_aaRS/Data/Output/Plots/Scatter_plots/Specific/", gene.x, "_v_", gene.y, "_protein_expression_CC_plot.png", sep = ""))
 ```
 
     ## Saving 12 x 8 in image
@@ -1058,7 +1060,7 @@ pca_effects_plot.p <- pairs(pca_effects.p$x,
                              main = "DO Allele Effects PCA pQTL" )
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-42-1.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-42-1.png" style="display: block; margin: auto;" />
 
 ``` r
 pca_effects_plot.r <- pairs(pca_effects.r$x, 
@@ -1066,7 +1068,7 @@ pca_effects_plot.r <- pairs(pca_effects.r$x,
                             main = "DO Allele Effects PCA eQTL" )
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-42-2.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-42-2.png" style="display: block; margin: auto;" />
 
 ``` r
 pca_expr_plot.p <- pairs(pca_expr.p$x, 
@@ -1074,7 +1076,7 @@ pca_expr_plot.p <- pairs(pca_expr.p$x,
                          main = "CC Expression PCA pQTL" )
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-42-3.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-42-3.png" style="display: block; margin: auto;" />
 
 ``` r
 pca_expr_plot.r <- pairs(pca_expr.r$x, 
@@ -1082,4 +1084,4 @@ pca_expr_plot.r <- pairs(pca_expr.r$x,
                          main = "CC Expression PCA eQTL" )
 ```
 
-<img src="DO192Liver_CCExpression_Plotting_files/figure-markdown_github/unnamed-chunk-42-4.png" style="display: block; margin: auto;" />
+<img src="DO192Liver_CCExpression_Complete_Plotting_files/figure-markdown_github/unnamed-chunk-42-4.png" style="display: block; margin: auto;" />
